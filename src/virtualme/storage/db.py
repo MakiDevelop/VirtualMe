@@ -190,6 +190,23 @@ class DB:
             ).fetchone()
         return Session(**dict(row))
 
+    async def get_current_week(self, interviewee_id: str, max_week: int = 8) -> int:
+        await self.init()
+        async with self._connect() as conn:
+            row = await (
+                await conn.execute(
+                    """
+                    SELECT MAX(week) AS max_completed_week
+                    FROM sessions
+                    WHERE interviewee_id = ?
+                      AND status = 'completed'
+                    """,
+                    (interviewee_id,),
+                )
+            ).fetchone()
+        completed_week = row[0] if row and row[0] is not None else 0
+        return max(1, min(int(completed_week) + 1, max_week))
+
     async def save_turn(self, session_id: int, role: str, content: str) -> Turn:
         digest = hashlib.sha256(f"{session_id}:{role}:{content}".encode()).hexdigest()
         async with self._connect() as conn:

@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 
 from anthropic import AsyncAnthropic
@@ -13,11 +14,16 @@ def _selector() -> QuestionSelector:
 
 
 async def main() -> None:
+    parser = argparse.ArgumentParser(description="Run a local VirtualMe interview session.")
+    parser.add_argument("--interviewee", default="local")
+    parser.add_argument("--week", type=int, default=None)
+    args = parser.parse_args()
+
     settings = Settings()
     db = DB(sqlite_path(settings.database_url))
     claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
     selector = _selector()
-    interviewee_id = "local"
+    interviewee_id = args.interviewee
     print("VirtualMe CLI. Ctrl-D to exit.")
     while True:
         try:
@@ -26,7 +32,15 @@ async def main() -> None:
             break
         if not incoming:
             continue
-        reply = await process_turn(interviewee_id, incoming, claude, db, selector, settings)
+        reply = await process_turn(
+            interviewee_id,
+            incoming,
+            claude,
+            db,
+            selector,
+            settings,
+            override_week=args.week,
+        )
         print(reply)
 
 

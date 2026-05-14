@@ -29,9 +29,16 @@ async def process_turn(
     db: DB,
     selector: QuestionSelector,
     settings: Settings | None = None,
+    override_week: int | None = None,
 ) -> str:
     settings = settings or Settings()
-    session = await db.get_or_create_session(interviewee_id, week=1)
+    max_week = max(selector.question_pool) if selector.question_pool else DEFAULT_QUESTION.week
+    week = (
+        max(1, min(override_week, max_week))
+        if override_week is not None
+        else await db.get_current_week(interviewee_id, max_week)
+    )
+    session = await db.get_or_create_session(interviewee_id, week=week)
     turn_count = await db.count_turns(session.id)
     scrub_result = scrub_pii(incoming_message)
     if scrub_result.redactions:

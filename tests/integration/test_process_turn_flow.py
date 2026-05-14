@@ -96,3 +96,138 @@ async def test_process_turn_scrubs_redactions_and_finalizes_session(tmp_path):
     triples = await db.load_triples("u1")
     assert len(triples) == 1
     assert triples[0].object == "direct interview flow"
+
+
+async def test_process_turn_advances_to_next_week_after_completion(tmp_path):
+    db = DB(str(tmp_path / "virtualme.db"))
+    await db.init()
+    selector = QuestionSelector(
+        {
+            1: [
+                Question(
+                    id="Q1",
+                    week=1,
+                    dimension=Dimension.STATE,
+                    text="How has work been?",
+                )
+            ],
+            2: [
+                Question(
+                    id="Q2",
+                    week=2,
+                    dimension=Dimension.SKILL,
+                    text="How do you work?",
+                )
+            ],
+        }
+    )
+    settings = Settings(anthropic_api_key=SecretStr("test"), use_ppa=True)
+    claude = _Claude()
+
+    for message in [
+        "When the migration started, I preferred short questions.",
+        "When I worked with a client, I wanted direct evidence.",
+        "When the team got stuck, I asked for the smallest check.",
+        "When planning, I choose reversible steps.",
+        "好累了,今天先這樣",
+    ]:
+        await process_turn("u1", message, claude, db, selector, settings)
+
+    assert await db.get_current_week("u1", max_week=2) == 2
+
+    await process_turn("u1", "Starting the next session.", claude, db, selector, settings)
+
+    async with aiosqlite.connect(db.path) as conn:
+        week2 = await (
+            await conn.execute(
+                "SELECT id, status FROM sessions WHERE interviewee_id = 'u1' AND week = 2"
+            )
+        ).fetchone()
+    assert week2 is not None
+    assert week2[1] == "active"
+
+
+async def test_process_turn_week_override_pins_specific_week(tmp_path):
+    db = DB(str(tmp_path / "virtualme.db"))
+    await db.init()
+    selector = QuestionSelector(
+        {
+            1: [
+                Question(
+                    id="Q1",
+                    week=1,
+                    dimension=Dimension.STATE,
+                    text="How has work been?",
+                )
+            ],
+            3: [
+                Question(
+                    id="Q3",
+                    week=3,
+                    dimension=Dimension.PEOPLE,
+                    text="Who shaped your work?",
+                )
+            ],
+        }
+    )
+    settings = Settings(anthropic_api_key=SecretStr("test"), use_ppa=False)
+    claude = _Claude()
+
+    await process_turn(
+        "u1",
+        "I want to repair week three.",
+        claude,
+        db,
+        selector,
+        settings,
+        override_week=3,
+    )
+
+    async with aiosqlite.connect(db.path) as conn:
+        weeks = await (
+            await conn.execute("SELECT week FROM sessions WHERE interviewee_id = 'u1'")
+        ).fetchall()
+    assert [row[0] for row in weeks] == [3]
+
+
+async def test_process_turn_week_override_is_capped_to_available_pool(tmp_path):
+    db = DB(str(tmp_path / "virtualme.db"))
+    await db.init()
+    selector = QuestionSelector(
+        {
+            1: [
+                Question(
+                    id="Q1",
+                    week=1,
+                    dimension=Dimension.STATE,
+                    text="How has work been?",
+                )
+            ],
+            3: [
+                Question(
+                    id="Q3",
+                    week=3,
+                    dimension=Dimension.PEOPLE,
+                    text="Who shaped your work?",
+                )
+            ],
+        }
+    )
+    settings = Settings(anthropic_api_key=SecretStr("test"), use_ppa=False)
+    claude = _Claude()
+
+    await process_turn(
+        "u1",
+        "Pin the latest available week.",
+        claude,
+        db,
+        selector,
+        settings,
+        override_week=99,
+    )
+
+    async with aiosqlite.connect(db.path) as conn:
+        weeks = await (
+            await conn.execute("SELECT week FROM sessions WHERE interviewee_id = 'u1'")
+        ).fetchall()
+    assert [row[0] for row in weeks] == [3]
