@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import aiosqlite
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from virtualme.interview.pii import Redaction
+
+T = TypeVar("T")
 
 
 class Dimension(StrEnum):
@@ -238,14 +241,38 @@ class DB:
         source_turn_ids: list[int],
         source_question_ids: list[str] | None = None,
     ) -> Anchor:
-        question_ids = source_question_ids if source_question_ids is not None else []
+        turn_ids = _dedupe_preserve_order(source_turn_ids)
+        question_ids = _dedupe_preserve_order(
+            source_question_ids if source_question_ids is not None else []
+        )
         async with self._connect() as conn:
+            conn.row_factory = aiosqlite.Row
+            if layer == Layer.PRINCIPLE:
+                existing = await self._find_matching_principle_anchor(
+                    conn, interviewee_id, dimension, content
+                )
+                if existing is not None:
+                    return await self._merge_anchor_sources(
+                        conn, existing, source_turn_ids, question_ids
+                    )
+            triangulated = len(set(question_ids)) >= 3 if layer == Layer.PRINCIPLE else False
             cur = await conn.execute(
                 """
-                INSERT INTO anchors(interviewee_id, dimension, layer, content, source_turn_ids, source_question_ids)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO anchors(
+                    interviewee_id, dimension, layer, content,
+                    triangulated, source_turn_ids, source_question_ids
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (interviewee_id, dimension, layer, content, json.dumps(source_turn_ids), json.dumps(question_ids)),
+                (
+                    interviewee_id,
+                    dimension,
+                    layer,
+                    content,
+                    int(triangulated),
+                    json.dumps(turn_ids),
+                    json.dumps(question_ids),
+                ),
             )
             await conn.commit()
             anchor_id = cur.lastrowid
@@ -255,7 +282,72 @@ class DB:
             dimension=dimension,
             layer=layer,
             content=content,
-            source_turn_ids=source_turn_ids,
+            triangulated=triangulated,
+            source_turn_ids=turn_ids,
+            source_question_ids=question_ids,
+        )
+
+    async def _find_matching_principle_anchor(
+        self,
+        conn: aiosqlite.Connection,
+        interviewee_id: str,
+        dimension: Dimension,
+        content: str,
+    ) -> aiosqlite.Row | None:
+        cur = await conn.execute(
+            """
+            SELECT * FROM anchors
+            WHERE interviewee_id = ?
+              AND dimension = ?
+              AND layer = ?
+            ORDER BY created_at
+            """,
+            (interviewee_id, dimension, Layer.PRINCIPLE),
+        )
+        for row in await cur.fetchall():
+            if _anchor_content_matches(content, row["content"]):
+                return row
+        return None
+
+    async def _merge_anchor_sources(
+        self,
+        conn: aiosqlite.Connection,
+        row: aiosqlite.Row,
+        source_turn_ids: list[int],
+        source_question_ids: list[str],
+    ) -> Anchor:
+        merged_turn_ids = _dedupe_preserve_order(
+            json.loads(row["source_turn_ids"]) + source_turn_ids
+        )
+        merged_question_ids = _dedupe_preserve_order(
+            json.loads(row["source_question_ids"]) + source_question_ids
+        )
+        triangulated = bool(row["triangulated"]) or len(set(merged_question_ids)) >= 3
+        await conn.execute(
+            """
+            UPDATE anchors
+            SET source_turn_ids = ?,
+                source_question_ids = ?,
+                triangulated = ?
+            WHERE id = ?
+            """,
+            (
+                json.dumps(merged_turn_ids),
+                json.dumps(merged_question_ids),
+                int(triangulated),
+                row["id"],
+            ),
+        )
+        await conn.commit()
+        return Anchor(
+            id=row["id"],
+            interviewee_id=row["interviewee_id"],
+            dimension=Dimension(row["dimension"]),
+            layer=Layer(row["layer"]),
+            content=row["content"],
+            triangulated=triangulated,
+            source_turn_ids=merged_turn_ids,
+            source_question_ids=merged_question_ids,
         )
 
     async def save_triple(self, triple) -> None:
@@ -434,3 +526,56 @@ def _anchor_from_row(row: aiosqlite.Row) -> Anchor:
         source_turn_ids=json.loads(row["source_turn_ids"]),
         source_question_ids=json.loads(source_question_ids_raw),
     )
+
+
+_ANCHOR_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "be",
+    "best",
+    "for",
+    "is",
+    "matter",
+    "matters",
+    "more",
+    "most",
+    "of",
+    "policy",
+    "principle",
+    "than",
+    "that",
+    "the",
+    "to",
+}
+
+
+def _anchor_content_matches(left: str, right: str) -> bool:
+    left_tokens = _anchor_tokens(left)
+    right_tokens = _anchor_tokens(right)
+    if not left_tokens or not right_tokens:
+        return left.strip().casefold() == right.strip().casefold()
+    overlap = left_tokens & right_tokens
+    smaller = min(len(left_tokens), len(right_tokens))
+    return len(overlap) >= 2 and (len(overlap) / smaller) >= 0.6
+
+
+def _anchor_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[\w']+", text.casefold())
+        if token not in _ANCHOR_STOPWORDS
+    }
+
+
+def _dedupe_preserve_order(items: list[T]) -> list[T]:
+    seen: set[T] = set()
+    result: list[T] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result
