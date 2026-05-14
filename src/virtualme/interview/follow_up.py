@@ -54,10 +54,21 @@ Keep their wording. Do not advise, praise, or explain.
 
 
 def _has_triangulated_repeat(answer: str, anchors: list[Anchor]) -> bool:
+    """Check if the answer represents a triangulated repeat.
+
+    Triangulation requires the principle to be surfaced in at least 3 DIFFERENT questions,
+    not just 3 turns. We count unique source_question_ids to enforce this.
+    """
     words = set(answer.lower().split())
     for anchor in anchors:
+        if anchor.layer != Layer.PRINCIPLE:
+            continue
         overlap = words & set(anchor.content.lower().split())
-        if anchor.layer == Layer.PRINCIPLE and len(overlap) >= 4 and len(set(anchor.source_turn_ids)) >= 3:
+        if len(overlap) < 4:
+            continue
+        # Count unique question IDs — triangulation needs 3 different questions
+        unique_questions = set(anchor.source_question_ids)
+        if len(unique_questions) >= 3:
             return True
     return False
 

@@ -37,6 +37,7 @@ Answer: {turn.content}
                 layer=Layer(row.get("layer", Layer.FACT)),
                 content=row.get("content", "").strip(),
                 source_turn_ids=[turn.id],
+                source_question_ids=[current_question.id],
             )
         )
     return [anchor for anchor in anchors if anchor.content]

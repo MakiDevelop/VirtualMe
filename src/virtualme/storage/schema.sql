@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS anchors (
     layer TEXT NOT NULL,
     content TEXT NOT NULL,
     triangulated INTEGER NOT NULL DEFAULT 0,
+    source_question_ids TEXT NOT NULL DEFAULT '[]',
     source_turn_ids TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     pii_tag TEXT

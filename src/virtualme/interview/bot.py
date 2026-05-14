@@ -47,6 +47,7 @@ async def process_turn(
                 anchor.layer,
                 anchor.content,
                 anchor.source_turn_ids,
+                anchor.source_question_ids,
             )
         next_question = selector.select_next(session, incoming_message, anchors_by_dimension, energy=5)
         reply = await _final_reply(interviewee_id, next_question or DEFAULT_QUESTION, claude, db)
