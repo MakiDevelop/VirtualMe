@@ -27,13 +27,30 @@ Two more things worth saying:
 
 ## Why now
 
-Academia validated this path. Stanford's Joon Park et al. published [arXiv:2411.10109](https://arxiv.org/abs/2411.10109) in November 2024, demonstrating that a 2-hour interview + LLM achieves 85% GSS self-recall accuracy. Joon then productionized the technology as [Simile](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/) in February 2026, raising **$100M USD** led by Index Ventures, with backing from Fei-Fei Li and Andrej Karpathy. Simile's mission: sell to enterprises predicting consumer / employee behavior.
+Academia validated this path. Stanford's Joon Park et al. published [arXiv:2411.10109](https://arxiv.org/abs/2411.10109) in November 2024, demonstrating that a 2-hour interview + LLM achieves 85% GSS self-recall accuracy. Joon then productionized the technology as [Simile](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/) in February 2026, raising **$100M USD** led by Index Ventures, with backing from Fei-Fei Li and Andrej Karpathy.
 
-VirtualMe uses the same academic foundation to solve the **opposite** problem:
+Simile has two product lines:
+- **B2B**: predict customer / employee behavior for enterprises (customers include CVS Health, Wealthfront, Suntory, Gallup)
+- **B2C**: [MiniMe](https://minime.simile.ai) — a ~10-minute interview to build a personal AI agent
 
-> **Simile validates the technology by giving enterprises the closed tools to predict others. VirtualMe applies the same foundation to give individuals the open-source tools to extract themselves.**
+MiniMe and VirtualMe are **direct competitors**. Comparison:
 
-The window is short. Open-source personal AI extraction is nearly empty (see [`07-related-work.md`](specs/07-related-work.md) for a verified survey). If you want this technology — and want to own your own markdown files rather than another SaaS account — now is when this is worth your attention.
+| | Simile MiniMe | VirtualMe |
+|---|---|---|
+| Interview length | ~10 minutes (single session) | 8 weeks of multi-turn therapist-style |
+| Depth | Quick snapshot | R1–R5 five-layer probing + triangulation |
+| Source | ❌ Closed | ✅ MIT |
+| Verification | Not public | Blind test protocol (Week 5 / Week 8) |
+| Data ownership | Held by Simile | Your own markdown files |
+| Cost | Unknown (likely bundled subscription) | ~$60 one-time + $5/month |
+| Evolution | Platform decides | You commit / fork |
+
+> **If you want a 10-minute snapshot to use inside Simile's ecosystem, go to MiniMe.**
+> **If you want 8-week deep extraction, files you own outright, the freedom to fork — VirtualMe.**
+
+These are different directions, not substitutes. But you should be clear about which one you're choosing.
+
+The open-source ecosystem for personal AI extraction is nearly empty ([`07-related-work.md`](specs/07-related-work.md) maps it: 5 verified open-source neighbors, none implementing the full pipeline). The window is short.
 
 ## The core flip: don't fill forms — get interviewed
 

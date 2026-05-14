@@ -40,24 +40,60 @@
 
 ### Post Persona Alignment (PPA) — EMNLP 2025 Findings
 
-[ACL Anthology link](https://aclanthology.org/2025.findings-emnlp.1098/) — "Post Persona Alignment for Multi-Session Dialogue Generation" (Chen et al., 2025)
+[arXiv:2506.11857](https://arxiv.org/abs/2506.11857) | [ACL Anthology](https://aclanthology.org/2025.findings-emnlp.1098/) — "Post Persona Alignment for Multi-Session Dialogue Generation" (Chen et al., RIKEN AIP + University of Tokyo, EMNLP 2025 Findings)
 
-**Claim:** Generate a general response first, then post-hoc align it to persona memory. Outperforms pre-retrieval methods on naturalness, diversity, and consistency simultaneously.
+**Three-stage architecture:**
+
+```
+Stage 0 (preprocessing): Compress sessions into (name, relation, object) triples → memory pool
+Stage 1: Generate R_g (general response, no persona conditioning)
+Stage 2: Use R_g as retrieval query → top-k memory entries M_k (threshold θ=0.2, k=5)
+Stage 3: Refine response with M_k context
+```
+
+**Reported benchmarks** (Table 1, multi-session LLM dialogue):
+
+| Strategy | C-Score | P-F1 |
+|---|---|---|
+| DirectGen (pre-conditioning) | 0.221 | 0.092 |
+| DialogRetr (pre-retrieval, ≈ VirtualMe v0.3 baseline) | 0.182 | 0.081 |
+| **PPA** | **0.456** | **0.146** |
+| Gold (human upper bound) | 0.554 | 0.147 |
+
+PPA also outperforms when triples are used vs raw utterances (C-Score 0.456 vs 0.359). Prompt templates are public in the paper's appendix A.
 
 **Implication for VirtualMe:**
-- This is the most promising non-fine-tune mitigation for persona drift in long conversations.
-- VirtualMe roadmap should adopt PPA as the agent response pipeline. Not yet implemented.
+- 2× improvement over VirtualMe's current pre-retrieval baseline
+- Pure prompting + retrieval, no fine-tune required
+- ~50 LoC change to `interview/bot.py:_final_reply()`
+- Stage 1 can use Haiku (cheap), Stage 3 can use Sonnet (no need for Opus)
+- Cost trade-off: breaks Anthropic prompt cache stable prefix (cache hit rate ~60% → ~30%), but Stage 1 is short, total token cost roughly balanced
+- Roadmap: **v0.4 primary deliverable**
 
 ### Persona drift quantification — arXiv:2512.12775
 
-[arXiv:2512.12775](https://arxiv.org/html/2512.12775v1) — "Persistent Personas? Role-Playing, Instruction Following, and Safety in Long Dialogues" (Dec 2025)
+[arXiv:2512.12775](https://arxiv.org/abs/2512.12775) | [ACL Anthology (EACL 2026 Long)](https://aclanthology.org/2026.eacl-long.246/) — "Persistent Personas? Role-Playing, Instruction Following, and Safety in Long Dialogues" (EACL 2026, published 2026-03-19)
 
 **Claim:** Tested 7 SOTA LLMs (open + closed). Persona fidelity systematically degrades over long dialogues across knowledge / style / in-character consistency. Goal-oriented dialogues degrade worst (persona vs instruction-following conflict). Drift is *systematic reversion to default behavior*, not random.
 
+**Critical insight for VirtualMe:** persona-directed dialogue (pure roleplay) degrades **slower** than goal-oriented dialogue (roleplay + task execution). This means the agent should structurally separate persona conversation from task execution rather than mixing both in a single session.
+
+**Mitigation methods catalog** (synthesized across paper + related work):
+
+| Method | Source | API-compatible? | Cost | VirtualMe |
+|---|---|---|---|---|
+| Periodic persona re-injection | implied by paper | ✅ yes | +tokens/turn | **v0.4** |
+| Persona-directed / goal-oriented mode separation | paper §findings | ✅ yes (architectural) | free | **v0.4** |
+| PPA (Post Persona Alignment) | arXiv:2506.11857 | ✅ yes | +1 LLM call | **v0.4** |
+| System prompt repetition | arXiv:2402.10962 | ✅ yes | high token cost | conditional |
+| Split-softmax (attention intervention) | arXiv:2402.10962 | ❌ needs open-weight | n/a | future open-weight only |
+| SinkTrack (attention sink anchoring) | arXiv:2604.10027 (ICLR 2026) | ❌ needs open-weight | n/a | future open-weight only |
+| Persona-Aware Contrastive Learning | arXiv:2503.17662 | ⚠️ needs contrastive data pipeline | high | v0.6 conditional |
+
 **Implication for VirtualMe:**
 - This is the canonical citation for "prompt-layer persona has structural ceilings."
-- VirtualMe explicitly mitigates with: (1) session cap (25 min dialogue), (2) periodic identity re-injection, (3) human review of outgoing content (`draft → review → ship`).
-- For autonomous multi-turn outbound use cases (e.g., multi-hour customer calls), VirtualMe is not appropriate.
+- For the Anthropic-API tier, only three mitigations are usable: periodic re-injection, mode separation, PPA. All three are scheduled for v0.4.
+- For autonomous multi-turn outbound use cases (e.g., multi-hour customer calls), VirtualMe is not appropriate — drift is delayed, not solved.
 
 ### Persona Ecosystem Playground (PEP) — arXiv:2603.03140
 
@@ -86,30 +122,50 @@
 
 ---
 
-## 3. The closest commercial counterpart
+## 3. The closest commercial counterparts
 
-### Simile (Joon Park, B2B enterprise)
+### Simile — B2B enterprise (Joon Park)
 
-**Why it matters:** Joon Park, lead author of [arXiv:2411.10109](https://arxiv.org/abs/2411.10109), founded Simile in early 2026. Simile raised **$100M in February 2026** led by Index Ventures, with backing from Fei-Fei Li and Andrej Karpathy. ([SiliconAngle coverage](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/), [TechFundingNews](https://techfundingnews.com/100m-for-stanford-spinout-simile-ai-that-simulates-human-decisions/))
+**Why it matters:** Joon Park, lead author of [arXiv:2411.10109](https://arxiv.org/abs/2411.10109), founded Simile in early 2026. Simile raised **$100M in February 2026** led by Index Ventures, with backing from Fei-Fei Li and Andrej Karpathy. ([SiliconAngle](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/), [TechFundingNews](https://techfundingnews.com/100m-for-stanford-spinout-simile-ai-that-simulates-human-decisions/))
 
-**What Simile does:**
-- B2B enterprise SaaS
+**Simile's B2B side:**
 - Trains on interview-grounded data + transaction logs + scientific journals
-- Sells "predict consumer / employee behavior" to enterprises (initial customers: CVS Health, Telstra)
+- Sells "predict consumer / employee behavior" to enterprises
+- Customers: CVS Health (merchandising), Wealthfront (qualitative research at 15× scale), Suntory (product development), Gallup (panel data access) ([implicator.ai coverage](https://www.implicator.ai/the-stanford-team-that-invented-generative-agents-wants-to-kill-the-focus-group/))
+- Use case Park mentioned on Bloomberg TV: "predict 8 of 10 earnings call questions"
 - Closed-source
 
-**How VirtualMe relates:**
+VirtualMe vs Simile B2B: different problems entirely (predict-others vs extract-self). No real overlap.
 
-| | Simile | VirtualMe |
+---
+
+### Simile MiniMe — B2C consumer (DIRECT competitor)
+
+**[minime.simile.ai](https://minime.simile.ai)** — Simile's consumer product. Personal users go through ~10 minutes of interview, get their own AI agent.
+
+**This is VirtualMe's direct competitor.** Both target individuals building agents of themselves. Comparison:
+
+| | Simile MiniMe | VirtualMe |
 |---|---|---|
-| Customer | Enterprises predicting their consumers/employees | Individuals extracting themselves |
-| Data | Interview + behavioral logs + scientific journals | Interview only (the interviewee's own 8 weeks) |
-| Ownership | Simile owns the model + simulations | Interviewee owns the markdown files |
+| Interview length | ~10 minutes (single session) | 8 weeks × ≤30 min (4–6 hours total) |
+| Method | Likely structured / brief | Therapist-style depth interview + R1–R5 follow-up |
+| Verification | Not publicly documented | Blind test at Week 5 + Week 8 |
+| Data ownership | Held by Simile | Markdown files owned by interviewee |
 | Source | Closed | Open (MIT) |
-| Cost | Enterprise pricing | < $60 USD |
-| Direction | Outward (model others) | Inward (extract self) |
+| Cost | Unknown (likely bundled subscription) | ~$60 one-time + $5/month |
+| Customization | Platform-defined | Fork-and-modify |
+| Audit / transparency | Black-box updates | Git-tracked changes |
+| Persona update protocol | Platform decides | [BOUNDARIES.md §6](05-boundaries-and-pii.md) requires confirmation |
 
-**Position statement:** Simile validates that interview-grounded LLM simulation is a real, fundable technology. VirtualMe applies the same academic foundation to a different problem — giving individuals the open-source tools to extract themselves, instead of giving enterprises the closed tools to predict others.
+**Honest positioning:**
+
+VirtualMe is NOT trying to compete on speed or polish. It is offering a different trade-off:
+- **MiniMe** → fast, low-effort, locked into Simile's platform
+- **VirtualMe** → slow, high-depth, open-source, you own everything
+
+People wanting a 10-minute snapshot inside Simile's growing ecosystem should pick MiniMe. People wanting depth + sovereignty + fork-ability should pick VirtualMe. These are different products with different audiences; the comparison table exists for clarity, not for arguing one is universally better.
+
+**Strategic implication:** the Simile family (B2B + MiniMe + future) now owns the "interview-grounded persona" category in commercial AI. VirtualMe's role in this ecosystem is to be the **open-source alternative** people can fork, modify, audit, and own. That's the position to hold — not "we're better than Simile."
 
 ---
 

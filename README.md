@@ -27,13 +27,30 @@
 
 ## Why now（為什麼是現在做這個）
 
-學術界已經把這條路驗證掉了：Stanford 的 Joon Park 等人 2024-11 發表 [arXiv:2411.10109](https://arxiv.org/abs/2411.10109)，證明 2 小時訪談 + LLM 可達 85% GSS 重答準確度。Joon 本人 2026-02 把這個技術 productionize 成 [Simile](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/)，由 Index Ventures 領投、Fei-Fei Li 與 Andrej Karpathy 背書，融資 **$100M USD**，目標是給企業預測客戶 / 員工行為。
+學術界已經把這條路驗證掉了：Stanford 的 Joon Park 等人 2024-11 發表 [arXiv:2411.10109](https://arxiv.org/abs/2411.10109)，證明 2 小時訪談 + LLM 可達 85% GSS 重答準確度。Joon 本人 2026-02 把這個技術 productionize 成 [Simile](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/)，由 Index Ventures 領投、Fei-Fei Li 與 Andrej Karpathy 背書，融資 **$100M USD**。
 
-VirtualMe 用同一個學術基礎，但解**反方向**的問題：
+Simile 有兩條產品線：
+- **B2B**：給企業預測客戶 / 員工行為（已有 CVS Health、Wealthfront、Suntory、Gallup 等客戶）
+- **B2C**：[MiniMe](https://minime.simile.ai)，10 分鐘訪談給個人用戶建 AI agent
 
-> **Simile validates the technology by giving enterprises the closed tools to predict others. VirtualMe applies the same foundation to give individuals the open-source tools to extract themselves.**
+MiniMe 跟 VirtualMe 是**最直接的競品**。對比：
 
-這個時間窗口很短：個人 AI extraction 的開源生態目前幾乎空白（spec [`07-related-work.md`](specs/07-related-work.md) 有完整盤點）。如果你想用這條技術路線、想擁有自己的 markdown 檔而不是另一個 SaaS 帳號——現在是最值得花時間的時候。
+| | Simile MiniMe | VirtualMe |
+|---|---|---|
+| 訪談長度 | ~10 分鐘（單次） | 8 週多輪 therapist-style |
+| 訪談深度 | 快速 snapshot | R1–R5 五層追問 + 三角校驗 |
+| 開源 | ❌ 閉源 | ✅ MIT |
+| 驗證機制 | 未公開 | Blind test protocol (Week 5 / Week 8) |
+| 數據所有權 | Simile 持有 | 你自己的 markdown 檔 |
+| 成本 | 未知（可能捆綁訂閱） | ~$60 一次 + $5/月 |
+| 持續演進 | 平台決定 | 你自己 commit / fork |
+
+> **如果你要的是 10 分鐘快速 snapshot 拿去 Simile 用，去 MiniMe。**
+> **如果你要的是 8 週深度萃取、檔案自己擁有、隨時可以 fork——VirtualMe。**
+
+兩件事不同方向，不是替代關係。但你應該清楚自己在選哪一條。
+
+開源個人 AI extraction 的生態目前幾乎空白（spec [`07-related-work.md`](specs/07-related-work.md) 有完整盤點：5 個 verified open-source neighbors，沒有一個實作完整 pipeline）。時間窗口很短。
 
 ## 核心翻轉：不填表，被訪談
 
