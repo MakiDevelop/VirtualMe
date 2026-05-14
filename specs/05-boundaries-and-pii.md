@@ -209,3 +209,97 @@ Anyone running VirtualMe for someone else (operator role) accepts:
 6. **Distinguish self-use from operating-for-others.** Running VirtualMe on yourself is one ethical context. Running it for another person is a different one with higher duty of care.
 
 If you cannot commit to these, do not run VirtualMe for others.
+
+---
+
+## 11. Legal & Regulatory Context (2026-05)
+
+This section is informational, not legal advice. Operators are responsible for their own jurisdiction's compliance.
+
+### 11.1 VirtualMe is NOT a companion chatbot
+
+VirtualMe is designed for **personal persona extraction and self-agent representation**, not emotional companionship. This distinction matters legally as of 2026:
+
+- **California SB 243** (effective 2026-01-01) — the first US state regulation of "AI companion chatbots." Requires disclosure of AI identity, minor protections, crisis protocols, restricted intimate content. ([TechCrunch](https://techcrunch.com/2025/10/13/california-becomes-first-state-to-regulate-ai-companion-chatbots/), [Skadden](https://www.skadden.com/insights/publications/2025/10/new-california-companion-chatbot-law))
+- **New York AI Chatbot Law** (Nov 2025) — first state to require AI companions to disclose AI identity + include self-harm detection protocols.
+- **Kentucky v. Character.AI** (Jan 2026) — first state to sue an AI companion provider.
+- **Character.AI + Google settlement** (Jan 2026) — settled the Sewell Setzer wrongful-death lawsuit. ([CNN](https://edition.cnn.com/2026/01/07/business/character-ai-google-settle-teen-suicide-lawsuit))
+
+VirtualMe deliberately differs from companion chatbots:
+- The "persona" represents the **interviewee themselves**, not a fictional friend
+- The agent's purpose is **draft generation for human review**, not standalone emotional interaction
+- No claim of persistent emotional relationship
+- Bot exits to professional help on crisis signals (see §5)
+
+### 11.2 Age requirement: 18+ only
+
+Given the legal landscape and the depth-interview methodology's potential to surface childhood / trauma / sensitive material, **VirtualMe is restricted to adult interviewees (18+)**.
+
+- Operators **must verify** interviewee age before starting Week 1
+- This is a hard rule, not a guideline. Running VirtualMe on minors creates legal exposure regardless of jurisdiction.
+- Corresponds to the elevated risk profile in [Replika's 2023 Italian DPA suspension](https://nysba.org/the-impact-of-the-eu-ai-act-on-the-use-of-ai-powered-chatbots/) (vulnerable individuals, including minors).
+
+### 11.3 Data ownership: the interviewee owns everything
+
+- All interview transcripts, SOUL.md / VOICE.md / etc., belong to the **interviewee**
+- VirtualMe (the project, the maintainers, the operator) **do not** hold, train on, sell, or share interview data
+- Deletion is honored within 24 hours and is hard delete (no backups recovered)
+
+### 11.4 AI disclosure when using outputs externally
+
+When the interviewee uses VirtualMe-generated content in communication with third parties (drafting LINE replies, generating LinkedIn posts, sending email):
+
+- **Recommended:** disclose that the content was AI-generated or AI-drafted
+- **Required in some jurisdictions:** EU AI Act transparency obligations apply starting 2026-08-02 to AI-generated content shown to humans. ([EU AI Act page](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai))
+- For high-stakes communication (contracts, legal documents, public statements), AI disclosure is mandatory regardless of jurisdiction — see immutable red lines §7.
+
+### 11.5 Voice / biometric data (if voice input is used)
+
+If operators enable voice transcription:
+- Voice recordings are considered **biometric data** under GDPR (and equivalent under Taiwan PDPA, California CCPA)
+- Operators must have explicit legal basis for processing
+- Operators should default to **discard audio after transcription** (don't persist raw voice unless legally justified)
+- Transcripts retain less risk than audio but still require informed consent
+
+### 11.6 Crisis protocol — explicit exclusion
+
+VirtualMe is **not** a mental-health crisis intervention tool. Operators must:
+- Not deploy VirtualMe as a substitute for professional mental health support
+- Ensure the crisis-detection protocol (§5) is active and not disabled
+- Provide region-appropriate crisis resources in their localized version
+
+The interview engine's bot crisis response is verbatim and must not be customized to "stay engaged" with someone in crisis.
+
+### 11.7 EU AI Act risk classification (TBD as of 2026-05)
+
+Whether VirtualMe falls under EU AI Act Chapter III "high-risk AI system" depends on use case:
+- **Self-extraction for personal use:** likely not high-risk
+- **Operator-run for clients on a commercial basis:** may be high-risk if outputs influence employment / credit / education / legal decisions
+- See [arXiv:2604.04604 "AI Agents Under EU Law"](https://arxiv.org/abs/2604.04604) for the current academic analysis
+
+Commercial operators should obtain legal advice for their specific deployment.
+
+### 11.8 Academic ethical anchor
+
+The closest academic framework for self-clone chatbots is the UBC CHI 2026 paper, which proposes guardrails against:
+- Reinforcing negative self-schema
+- Inadequate data privacy
+- Loss of user agency
+
+VirtualMe's BOUNDARIES.md was designed before the UBC paper was available but converges on the same principles. ([UBC CHI 2026 paper](https://www.cs.ubc.ca/labs/socius/files/papers/chi2026-selfclone.pdf))
+
+---
+
+## 12. Summary
+
+| Topic | Rule |
+|---|---|
+| Age | 18+ only, operators verify |
+| Companion chatbot status | Not a companion; designed for self-extraction |
+| Data ownership | Interviewee owns everything |
+| Deletion | Hard delete within 24 hours |
+| AI disclosure | Recommended always; required in EU from 2026-08-02 |
+| Voice / biometrics | Discard after transcription unless legally justified |
+| Crisis | Refer out, do not stay engaged |
+| Minor markets | Restricted regardless of local law |
+

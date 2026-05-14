@@ -25,6 +25,16 @@
 - 這不是另一個會在某天 silently update 之後讓你覺得「我的 AI 變成另一個人了」的黑盒子產品——SOUL / VOICE / BOUNDARIES 是你自己的 markdown 檔，每次修改你都看得到、改得回。
 - 你的訪談對話**不出你的機器**。沒有後台、沒有人類 moderator review、沒有 cloud sync。`hard delete` 是真的 hard。
 
+## Why now（為什麼是現在做這個）
+
+學術界已經把這條路驗證掉了：Stanford 的 Joon Park 等人 2024-11 發表 [arXiv:2411.10109](https://arxiv.org/abs/2411.10109)，證明 2 小時訪談 + LLM 可達 85% GSS 重答準確度。Joon 本人 2026-02 把這個技術 productionize 成 [Simile](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/)，由 Index Ventures 領投、Fei-Fei Li 與 Andrej Karpathy 背書，融資 **$100M USD**，目標是給企業預測客戶 / 員工行為。
+
+VirtualMe 用同一個學術基礎，但解**反方向**的問題：
+
+> **Simile validates the technology by giving enterprises the closed tools to predict others. VirtualMe applies the same foundation to give individuals the open-source tools to extract themselves.**
+
+這個時間窗口很短：個人 AI extraction 的開源生態目前幾乎空白（spec [`07-related-work.md`](specs/07-related-work.md) 有完整盤點）。如果你想用這條技術路線、想擁有自己的 markdown 檔而不是另一個 SaaS 帳號——現在是最值得花時間的時候。
+
 ## 核心翻轉：不填表，被訪談
 
 填問卷產出的人格檔案是**表演式**的——大多數人寫的是「我想成為的樣子」而不是「我實際是誰」，結果產出的 AI 代理人講話像 LinkedIn 簡介。

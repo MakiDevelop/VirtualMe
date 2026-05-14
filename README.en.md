@@ -25,6 +25,16 @@ Two more things worth saying:
 - This is not another black-box product that will one day silently update and make you feel "my AI became someone else." SOUL / VOICE / BOUNDARIES are your own markdown files. Every change is visible and revertible.
 - Your interview conversations **never leave your machine**. No backend, no human moderators reviewing transcripts, no cloud sync. `hard delete` actually means hard delete.
 
+## Why now
+
+Academia validated this path. Stanford's Joon Park et al. published [arXiv:2411.10109](https://arxiv.org/abs/2411.10109) in November 2024, demonstrating that a 2-hour interview + LLM achieves 85% GSS self-recall accuracy. Joon then productionized the technology as [Simile](https://siliconangle.com/2026/02/12/ai-digital-twin-startup-simile-raises-100m-funding/) in February 2026, raising **$100M USD** led by Index Ventures, with backing from Fei-Fei Li and Andrej Karpathy. Simile's mission: sell to enterprises predicting consumer / employee behavior.
+
+VirtualMe uses the same academic foundation to solve the **opposite** problem:
+
+> **Simile validates the technology by giving enterprises the closed tools to predict others. VirtualMe applies the same foundation to give individuals the open-source tools to extract themselves.**
+
+The window is short. Open-source personal AI extraction is nearly empty (see [`07-related-work.md`](specs/07-related-work.md) for a verified survey). If you want this technology — and want to own your own markdown files rather than another SaaS account — now is when this is worth your attention.
+
 ## The core flip: don't fill forms — get interviewed
 
 Form-filled persona files are **performative**. Most people describe who they *want to be*, not who they *are*. The result is an AI agent that sounds like a LinkedIn bio.
