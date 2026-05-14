@@ -152,6 +152,60 @@ class DB:
             source_turn_ids=source_turn_ids,
         )
 
+    async def save_triple(self, triple) -> None:
+        from virtualme.interview.triples import PersonaTriple
+
+        parsed = triple if isinstance(triple, PersonaTriple) else PersonaTriple(**triple)
+        async with aiosqlite.connect(self.path) as conn:
+            await conn.execute(
+                """
+                INSERT INTO persona_triples(
+                    interviewee_id, subject, relation, object, source_turn_ids, confidence
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    parsed.interviewee_id,
+                    parsed.subject,
+                    parsed.relation,
+                    parsed.object,
+                    json.dumps(parsed.source_turn_ids),
+                    parsed.confidence,
+                ),
+            )
+            await conn.commit()
+
+    async def load_triples(self, interviewee_id: str):
+        from virtualme.interview.triples import PersonaTriple
+
+        async with aiosqlite.connect(self.path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cur = await conn.execute(
+                "SELECT * FROM persona_triples WHERE interviewee_id = ? ORDER BY created_at",
+                (interviewee_id,),
+            )
+            rows = await cur.fetchall()
+        return [
+            PersonaTriple(
+                id=row["id"],
+                interviewee_id=row["interviewee_id"],
+                subject=row["subject"],
+                relation=row["relation"],
+                object=row["object"],
+                source_turn_ids=json.loads(row["source_turn_ids"]),
+                confidence=row["confidence"],
+            )
+            for row in rows
+        ]
+
+    async def update_triple_embedding(self, triple_id: int, embedding: bytes) -> None:
+        async with aiosqlite.connect(self.path) as conn:
+            await conn.execute(
+                "UPDATE persona_triples SET embedding = ? WHERE id = ?",
+                (embedding, triple_id),
+            )
+            await conn.commit()
+
     async def mark_triangulated(self, anchor_id: int) -> None:
         async with aiosqlite.connect(self.path) as conn:
             await conn.execute("UPDATE anchors SET triangulated = 1 WHERE id = ?", (anchor_id,))
@@ -179,6 +233,28 @@ class DB:
         summary = await self.load_anchors_summary(interviewee_id)
         max_count = max((len(items) for items in summary.values()), default=0) or 1
         return {dimension: 1.0 - (len(items) / max_count) for dimension, items in summary.items()}
+
+    async def count_turns(self, session_id: int) -> int:
+        async with aiosqlite.connect(self.path) as conn:
+            row = await (
+                await conn.execute("SELECT COUNT(*) AS count FROM turns WHERE session_id = ?", (session_id,))
+            ).fetchone()
+        return int(row[0])
+
+    async def load_recent_turns(self, session_id: int, limit: int = 10) -> list[Turn]:
+        async with aiosqlite.connect(self.path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cur = await conn.execute(
+                """
+                SELECT * FROM turns
+                WHERE session_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (session_id, limit),
+            )
+            rows = await cur.fetchall()
+        return [Turn(**dict(row)) for row in reversed(rows)]
 
     async def _fetch_anchors(self, interviewee_id: str, triangulated: bool | None = None):
         clause = "AND triangulated = ?" if triangulated is not None else ""

@@ -1,4 +1,4 @@
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,22 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     log_level: str = "INFO"
+    use_ppa: bool = Field(False, validation_alias=AliasChoices("use_ppa", "VIRTUALME_USE_PPA"))
+    ppa_retrieval_threshold: float = Field(
+        0.2,
+        validation_alias=AliasChoices(
+            "ppa_retrieval_threshold",
+            "VIRTUALME_PPA_RETRIEVAL_THRESHOLD",
+        ),
+    )
+    ppa_retrieval_k: int = Field(
+        5,
+        validation_alias=AliasChoices("ppa_retrieval_k", "VIRTUALME_PPA_RETRIEVAL_K"),
+    )
+    reinjection_interval: int = Field(
+        20,
+        validation_alias=AliasChoices("reinjection_interval", "VIRTUALME_REINJECTION_INTERVAL"),
+    )
 
 
 def sqlite_path(database_url: str) -> str:

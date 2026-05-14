@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS voice_samples (
     pii_scrubbed INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS persona_triples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    interviewee_id TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    object TEXT NOT NULL,
+    source_turn_ids TEXT NOT NULL,
+    confidence REAL DEFAULT 1.0,
+    embedding BLOB,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_triples_interviewee
+    ON persona_triples(interviewee_id);
+
 CREATE TABLE IF NOT EXISTS question_state (
     interviewee_id TEXT NOT NULL,
     question_id TEXT NOT NULL,

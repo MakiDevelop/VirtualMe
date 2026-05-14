@@ -42,7 +42,7 @@ async def main() -> None:
             break
         if not incoming:
             continue
-        reply = await process_turn(interviewee_id, incoming, claude, db, selector)
+        reply = await process_turn(interviewee_id, incoming, claude, db, selector, settings)
         print(reply)
 
 

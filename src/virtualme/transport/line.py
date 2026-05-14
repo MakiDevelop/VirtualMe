@@ -6,6 +6,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from fastapi import HTTPException, Request
 
+from virtualme.config import Settings
 from virtualme.interview.bot import process_turn
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.storage.db import DB
@@ -23,6 +24,7 @@ async def handle_line_webhook(
     db: DB,
     selector: QuestionSelector,
     channel_secret: str | None,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     body = await request.body()
     signature = request.headers.get("x-line-signature", "")
@@ -39,6 +41,6 @@ async def handle_line_webhook(
             continue
         source = event.get("source", {})
         interviewee_id = source.get("userId") or "line-unknown"
-        reply = await process_turn(interviewee_id, message.get("text", ""), claude, db, selector)
+        reply = await process_turn(interviewee_id, message.get("text", ""), claude, db, selector, settings)
         replies.append({"interviewee_id": interviewee_id, "reply": reply})
     return {"ok": True, "replies": replies}

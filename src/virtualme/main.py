@@ -34,4 +34,4 @@ async def line_webhook(request: Request) -> dict:
         if settings.line_channel_secret is not None
         else None
     )
-    return await handle_line_webhook(request, claude, db, selector, secret)
+    return await handle_line_webhook(request, claude, db, selector, secret, settings)
