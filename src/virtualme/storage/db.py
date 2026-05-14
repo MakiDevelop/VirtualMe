@@ -60,6 +60,7 @@ class Anchor(BaseModel):
     content: str
     triangulated: bool = False
     source_turn_ids: list[int] = []
+    source_question_ids: list[str] = []
 
 
 class Principle(BaseModel):
@@ -161,14 +162,16 @@ class DB:
         layer: Layer,
         content: str,
         source_turn_ids: list[int],
+        source_question_ids: list[str] | None = None,
     ) -> Anchor:
+        question_ids = source_question_ids if source_question_ids is not None else []
         async with aiosqlite.connect(self.path) as conn:
             cur = await conn.execute(
                 """
-                INSERT INTO anchors(interviewee_id, dimension, layer, content, source_turn_ids)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO anchors(interviewee_id, dimension, layer, content, source_turn_ids, source_question_ids)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (interviewee_id, dimension, layer, content, json.dumps(source_turn_ids)),
+                (interviewee_id, dimension, layer, content, json.dumps(source_turn_ids), json.dumps(question_ids)),
             )
             await conn.commit()
             anchor_id = cur.lastrowid
@@ -341,6 +344,7 @@ class DB:
 
 
 def _anchor_from_row(row: aiosqlite.Row) -> Anchor:
+    source_question_ids_raw = row["source_question_ids"] if "source_question_ids" in row.keys() else "[]"
     return Anchor(
         id=row["id"],
         interviewee_id=row["interviewee_id"],
@@ -349,4 +353,5 @@ def _anchor_from_row(row: aiosqlite.Row) -> Anchor:
         content=row["content"],
         triangulated=bool(row["triangulated"]),
         source_turn_ids=json.loads(row["source_turn_ids"]),
+        source_question_ids=json.loads(source_question_ids_raw),
     )

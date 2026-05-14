@@ -59,6 +59,7 @@ async def process_turn(
                 anchor.layer,
                 anchor.content,
                 anchor.source_turn_ids,
+                anchor.source_question_ids,
             )
         next_question = selector.select_next(
             session,
