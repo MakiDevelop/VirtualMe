@@ -160,7 +160,10 @@ def _alias(original: str, aliases: dict[str, str], namespace: str, label: str, c
 
 def _salary_replacement(match: re.Match[str], _aliases: dict[str, str]) -> tuple[str, str]:
     raw = match.group(0).lower().replace(",", "")
-    if not ("k" in raw or "000" in raw or "-" in raw):
+    # A bare numeric range (e.g. "100-150") is too ambiguous to treat as salary:
+    # it is just as likely a count, score, or page range. Require an explicit
+    # magnitude marker (k / 000); ranges like "80k-100k" still qualify.
+    if not ("k" in raw or "000" in raw):
         return ("", "salary")
     low = _salary_to_k(match.group(1), raw)
     high = _salary_to_k(match.group(2), raw) if match.group(2) else low

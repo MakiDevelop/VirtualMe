@@ -37,6 +37,13 @@ def test_salary_bucketed():
     assert scrub_pii("Salary was 185k").scrubbed_text == "Salary was [Salary 180-200k]"
 
 
+def test_bare_numeric_range_not_treated_as_salary():
+    # "100-150" has no k/000 magnitude marker — it is ambiguous (counts, scores,
+    # page ranges) and must not be redacted as salary.
+    assert scrub_pii("專案 100-150 小時").scrubbed_text == "專案 100-150 小時"
+    assert "salary" not in detect_pii("we ran 100-150 experiments")
+
+
 def test_age_bucketed():
     assert scrub_pii("She is 34 years old").scrubbed_text == "She is [Age 30s]"
 
