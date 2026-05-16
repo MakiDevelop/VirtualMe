@@ -21,11 +21,14 @@ class QuestionSelector:
         accumulated_anchors: dict[Dimension, list[Anchor]],
         energy: int,
         asked_question_ids: set[str] | None = None,
+        adaptive: bool = False,
     ) -> Question | None:
         asked = asked_question_ids or set()
         if _has_unexplored_layer(accumulated_anchors):
             return None
-        questions = self.question_pool.get(session.week) or _flatten(self.question_pool)
+        questions = _flatten(self.question_pool) if adaptive else (
+            self.question_pool.get(session.week) or _flatten(self.question_pool)
+        )
         if not questions:
             return None
         if energy < 3:

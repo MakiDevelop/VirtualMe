@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from anthropic import AsyncAnthropic
 
 from virtualme.interview.triples import extract_triples_from_session
-from virtualme.storage.db import DB, Turn
+from virtualme.storage.db import DB, Dimension, Turn
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,23 @@ def is_session_stale(last_turn_at: datetime, threshold_minutes: int = 30) -> boo
     now = datetime.now(UTC)
     last_seen = last_turn_at if last_turn_at.tzinfo else last_turn_at.replace(tzinfo=UTC)
     return now - last_seen >= timedelta(minutes=threshold_minutes)
+
+
+def is_persona_sufficient(
+    round_number: int,
+    max_rounds: int,
+    anchors_by_dimension: dict,
+) -> bool:
+    """PoC adaptive-extraction stop condition.
+
+    Extraction is 'sufficient' when either the round cap is reached, or the
+    two PoC-critical dimensions (VOICE, BOUNDARIES) each have enough anchors.
+    """
+    if round_number >= max_rounds:
+        return True
+    voice = len(anchors_by_dimension.get(Dimension.VOICE, []))
+    boundaries = len(anchors_by_dimension.get(Dimension.BOUNDARIES, []))
+    return voice >= 3 and boundaries >= 3
 
 
 async def finalize_session_if_closing(

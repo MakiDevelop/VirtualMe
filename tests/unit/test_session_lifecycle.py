@@ -1,11 +1,12 @@
 from virtualme.interview import session_lifecycle
 from virtualme.interview.session_lifecycle import (
     finalize_session_if_closing,
+    is_persona_sufficient,
     is_session_closing,
     is_session_stale,
 )
 from virtualme.interview.triples import PersonaTriple
-from virtualme.storage.db import Turn
+from virtualme.storage.db import Dimension, Turn
 
 
 def test_is_session_closing_true():
@@ -33,6 +34,28 @@ def test_is_session_stale_true_for_old_turn():
     from datetime import UTC, datetime, timedelta
 
     assert is_session_stale(datetime.now(UTC) - timedelta(minutes=31))
+
+
+def test_is_persona_sufficient_true_at_round_cap():
+    assert is_persona_sufficient(3, 3, {}) is True
+
+
+def test_is_persona_sufficient_true_with_voice_and_boundaries_anchors():
+    anchors = {
+        Dimension.VOICE: [object(), object(), object()],
+        Dimension.BOUNDARIES: [object(), object(), object()],
+    }
+
+    assert is_persona_sufficient(2, 3, anchors) is True
+
+
+def test_is_persona_sufficient_false_when_round_and_anchors_are_insufficient():
+    anchors = {
+        Dimension.VOICE: [object(), object()],
+        Dimension.BOUNDARIES: [object(), object(), object()],
+    }
+
+    assert is_persona_sufficient(2, 3, anchors) is False
 
 
 async def test_finalize_session_if_closing_extracts_and_saves(monkeypatch):

@@ -38,7 +38,13 @@ async def process_turn(
     override_week: int | None = None,
 ) -> str:
     settings = settings or Settings()
-    max_week = max(selector.question_pool) if selector.question_pool else DEFAULT_QUESTION.week
+    max_week = (
+        settings.max_extraction_rounds
+        if settings.adaptive_extraction
+        else max(selector.question_pool)
+        if selector.question_pool
+        else DEFAULT_QUESTION.week
+    )
     week = (
         max(1, min(override_week, max_week))
         if override_week is not None
@@ -86,6 +92,7 @@ async def process_turn(
             anchors_by_dimension,
             energy=5,
             asked_question_ids=asked_question_ids,
+            adaptive=settings.adaptive_extraction,
         )
         if next_question is not None:
             await db.set_current_question_id(session.id, next_question.id)

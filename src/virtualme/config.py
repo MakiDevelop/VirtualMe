@@ -16,6 +16,20 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     use_ppa: bool = Field(False, validation_alias=AliasChoices("use_ppa", "VIRTUALME_USE_PPA"))
+    adaptive_extraction: bool = Field(
+        False,
+        validation_alias=AliasChoices(
+            "adaptive_extraction",
+            "VIRTUALME_ADAPTIVE_EXTRACTION",
+        ),
+    )
+    max_extraction_rounds: int = Field(
+        3,
+        validation_alias=AliasChoices(
+            "max_extraction_rounds",
+            "VIRTUALME_MAX_EXTRACTION_ROUNDS",
+        ),
+    )
     ppa_retrieval_threshold: float = Field(
         0.2,
         validation_alias=AliasChoices(

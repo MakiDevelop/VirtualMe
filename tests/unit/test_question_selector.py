@@ -16,6 +16,10 @@ def _session() -> Session:
     return Session(id=1, interviewee_id="u1", week=1)
 
 
+def _session_for_week(week: int) -> Session:
+    return Session(id=1, interviewee_id="u1", week=week)
+
+
 def test_returns_none_when_unexplored_layer_exists():
     selector = QuestionSelector({1: [_question("H1", Dimension.HISTORY)]})
     anchors = {
@@ -122,6 +126,63 @@ def test_low_energy_switches_to_light_topic():
         }
     )
     assert selector.select_next(_session(), None, {}, energy=2).dimension == Dimension.STATE
+
+
+def test_adaptive_selects_from_full_pool_when_session_week_is_outside_pool():
+    selector = QuestionSelector({1: [_question("S1", Dimension.SKILL)]})
+
+    selected = selector.select_next(
+        _session_for_week(99),
+        None,
+        {},
+        energy=5,
+        adaptive=True,
+    )
+
+    assert selected.id == "S1"
+
+
+def test_adaptive_ignores_session_week_slice():
+    selector = QuestionSelector(
+        {
+            1: [_question("H1", Dimension.HISTORY)],
+            2: [_question("S1", Dimension.SKILL)],
+        }
+    )
+    anchors = {
+        Dimension.HISTORY: [
+            Anchor(
+                interviewee_id="u1",
+                dimension=Dimension.HISTORY,
+                layer=Layer.PRINCIPLE,
+                content="history principle",
+            )
+        ]
+    }
+
+    selected = selector.select_next(
+        _session(),
+        None,
+        anchors,
+        energy=5,
+        adaptive=True,
+    )
+
+    assert selected.id == "S1"
+
+
+def test_non_adaptive_keeps_existing_week_fallback_behavior():
+    selector = QuestionSelector({1: [_question("S1", Dimension.SKILL)]})
+
+    selected = selector.select_next(
+        _session_for_week(99),
+        None,
+        {},
+        energy=5,
+        adaptive=False,
+    )
+
+    assert selected.id == "S1"
 
 
 def test_load_packaged_question_pool_uses_current_yaml_shape():
