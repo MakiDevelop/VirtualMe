@@ -135,15 +135,27 @@ async def export_snapshot(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
 
 
 def render_soul_lite(bundle: SnapshotBundle) -> str:
+    low_confidence_count = sum(1 for item in bundle.hypotheses if item.confidence == "low")
     lines = [
         f"# SOUL-lite Snapshot: {bundle.interviewee_id}",
         "",
         f"- Schema version: {bundle.schema_version}",
         f"- Generated at: {bundle.generated_at}",
         "- Status: hypothesis draft, not a verified persona",
+        f"- Quality warning: {_quality_warning(bundle)}",
         "",
         "This file is a first-pass personality hypothesis. Treat every item as",
         "`像 / 不像 / 不確定` feedback material, not as a final truth.",
+        "",
+        "## Top-Level Sketch",
+        "",
+        *_top_level_sketch(bundle),
+        "",
+        "## Review Priority",
+        "",
+        f"- Low-confidence hypotheses: {low_confidence_count}/{len(bundle.hypotheses)}",
+        f"- First blind-test target: {_first_review_target(bundle)}",
+        "- Pass condition: the human can name why one answer is more like them, not just pick A/B.",
         "",
         "## Hypotheses",
         "",
@@ -195,13 +207,14 @@ def render_mini_blind_test(bundle: SnapshotBundle) -> str:
         "4. Ask the human which one is more like them and why.",
         "5. Route misses using `feedback-routing.md`.",
         "",
-        "| ID | Dimension | Scenario | Compare | Notes |",
-        "|---|---|---|---|---|",
+        "| ID | Dimension | Concrete scenario | A/B prompt | Must compare | Notes |",
+        "|---|---|---|---|---|---|",
     ]
     for item in bundle.mini_blind_test:
         lines.append(
             "| "
             f"{item.id} | {item.dimension.value} | {item.scenario} | "
+            "Draft two 3-5 sentence answers: one human answer, one persona answer. | "
             f"{item.what_to_compare} | {item.evidence_hint} |"
         )
     lines.extend(
@@ -209,12 +222,12 @@ def render_mini_blind_test(bundle: SnapshotBundle) -> str:
             "",
             "Scorecard:",
             "",
-            "| ID | More-like answer (A/B) | Why | Route next? |",
-            "|---|---|---|---|",
+            "| ID | More-like answer (A/B) | Exact unlike-me phrase | Missing decision signal | Route next? |",
+            "|---|---|---|---|---|",
         ]
     )
     for item in bundle.mini_blind_test:
-        lines.append(f"| {item.id} |  |  |  |")
+        lines.append(f"| {item.id} |  |  |  |  |")
     return "\n".join(lines) + "\n"
 
 
@@ -224,19 +237,75 @@ def render_feedback_routing(bundle: SnapshotBundle) -> str:
         "",
         "Use this when the user says `這不像我` or `不確定` during Snapshot review.",
         "",
-        "| Hypothesis | Dimension | If user rejects it | Suggested follow-up |",
-        "|---|---|---|---|",
+        "| Hypothesis | Dimension | If user rejects it | Counterexample to collect | Pressure signal | Exception signal | Exact wording signal | Decision tradeoff signal |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for item in bundle.hypotheses:
         lines.append(
             f"| {item.id} | {item.dimension.value} | "
             f"mark {item.dimension.value} as needing re-interview; inspect evidence provenance | "
-            f"{item.suggested_follow_up} |"
+            f"{_counterexample_signal(item)} | "
+            f"{_pressure_signal(item)} | "
+            f"{_exception_signal(item)} | "
+            f"{_exact_wording_signal(item)} | "
+            f"{_decision_tradeoff_signal(item)} |"
         )
     lines.extend(["", "Open routes:", ""])
     for route in bundle.feedback_routes:
         lines.append(f"- {route}")
     return "\n".join(lines) + "\n"
+
+
+def _quality_warning(bundle: SnapshotBundle) -> str:
+    if not bundle.hypotheses:
+        return "no hypotheses yet; do not run blind test"
+    low_count = sum(1 for item in bundle.hypotheses if item.confidence == "low")
+    high_count = sum(1 for item in bundle.hypotheses if item.confidence == "high")
+    if low_count == len(bundle.hypotheses):
+        return "all hypotheses are low confidence; use only for targeted follow-up"
+    if high_count == 0:
+        return "no high-confidence hypothesis yet; require mini blind test before persona use"
+    if low_count:
+        return f"{low_count} low-confidence hypotheses need focused follow-up"
+    return "usable as a review draft after human confirmation"
+
+
+def _top_level_sketch(bundle: SnapshotBundle) -> list[str]:
+    if not bundle.hypotheses:
+        return ["_No sketch yet._"]
+
+    by_dimension = {item.dimension: item for item in bundle.hypotheses}
+    lines = [
+        f"- Core decision default: {_sketch_phrase(by_dimension.get(Dimension.SOUL))}",
+        f"- Boundary / refusal pattern: {_sketch_phrase(by_dimension.get(Dimension.BOUNDARIES))}",
+        f"- Communication surface: {_sketch_phrase(by_dimension.get(Dimension.VOICE))}",
+        f"- Work / capability pattern: {_sketch_phrase(by_dimension.get(Dimension.SKILL))}",
+        f"- Trust / people pattern: {_sketch_phrase(by_dimension.get(Dimension.PEOPLE))}",
+    ]
+    strongest = bundle.hypotheses[0]
+    lines.append(
+        f"- Strongest current signal: {strongest.id} ({strongest.dimension.value}, "
+        f"{strongest.confidence})"
+    )
+    return lines
+
+
+def _sketch_phrase(hypothesis: SoulLiteHypothesis | None) -> str:
+    if hypothesis is None:
+        return "unknown; needs interview evidence"
+    return f"{_strip_hypothesis_prefix(hypothesis.hypothesis)} ({hypothesis.id}, {hypothesis.confidence})"
+
+
+def _strip_hypothesis_prefix(text: str) -> str:
+    _, separator, tail = text.partition(": ")
+    return tail if separator else text
+
+
+def _first_review_target(bundle: SnapshotBundle) -> str:
+    if not bundle.mini_blind_test:
+        return "none"
+    first = bundle.mini_blind_test[0]
+    return f"{first.id} / {first.dimension.value}"
 
 
 def _build_hypotheses(
@@ -334,7 +403,7 @@ def _build_mini_blind_test(hypotheses: list[SoulLiteHypothesis]) -> list[MiniBli
                 id=f"T{index}",
                 dimension=hypothesis.dimension,
                 scenario=_scenario_for(hypothesis),
-                what_to_compare="Which answer chooses, refuses, or phrases things more like the human?",
+                what_to_compare=_compare_prompt_for(hypothesis),
                 evidence_hint=f"Based on {hypothesis.id}: {hypothesis.hypothesis}",
             )
         )
@@ -343,9 +412,10 @@ def _build_mini_blind_test(hypotheses: list[SoulLiteHypothesis]) -> list[MiniBli
 
 def _build_feedback_routes(hypotheses: list[SoulLiteHypothesis]) -> list[str]:
     routes = [
-        "If wording feels wrong, route to VOICE and collect 2-3 message samples.",
-        "If a value feels wrong, route to SOUL and ask for a concrete counterexample.",
-        "If a refusal feels wrong, route to BOUNDARIES and ask when the user would make an exception.",
+        "If wording feels wrong, route to VOICE and collect exact words the user would send.",
+        "If a value feels wrong, route to SOUL and collect a counterexample plus the tradeoff that changed the decision.",
+        "If a refusal feels wrong, route to BOUNDARIES and collect the exception rule, not just the refusal.",
+        "If the answer is plausible but generic, route to the strongest related dimension and ask for a pressure case.",
     ]
     weak_dimensions = sorted({item.dimension.value for item in hypotheses if item.needs_verification})
     if weak_dimensions:
@@ -405,17 +475,84 @@ def _suggested_follow_up(candidate: _Candidate) -> str:
 
 
 def _scenario_for(hypothesis: SoulLiteHypothesis) -> str:
+    evidence = _strip_hypothesis_prefix(hypothesis.hypothesis)
     scenarios = {
-        Dimension.SOUL: "A collaborator asks you to choose between keeping peace and saying what you believe is true.",
-        Dimension.BOUNDARIES: "Someone asks for a favor that violates one of your stated boundaries.",
-        Dimension.VOICE: "You need to send a short LINE message about a frustrating situation.",
-        Dimension.SKILL: "A project is behind schedule and the first plan is not working.",
-        Dimension.PEOPLE: "A partner's reliability is uncertain and you need to decide how much to trust them.",
+        Dimension.SOUL: (
+            "A collaborator asks you to choose between preserving harmony and acting on "
+            f"`{evidence}`. Write what you would decide and what you would say."
+        ),
+        Dimension.BOUNDARIES: (
+            "A trusted person asks for an urgent exception that conflicts with "
+            f"`{evidence}`. Write the refusal, compromise, or exception rule."
+        ),
+        Dimension.VOICE: (
+            "You need to send a short LINE message in a tense situation where "
+            f"`{evidence}` matters. Write the exact message."
+        ),
+        Dimension.SKILL: (
+            "A project is behind schedule and the first plan is failing. Use "
+            f"`{evidence}` to decide the next action and explain it to the team."
+        ),
+        Dimension.PEOPLE: (
+            "A partner's reliability is uncertain and you must decide how much trust or "
+            f"visibility to give them, given `{evidence}`."
+        ),
     }
     return scenarios.get(
         hypothesis.dimension,
-        "A realistic situation tests whether this hypothesis changes what you would say or choose.",
+        f"A realistic situation tests whether `{evidence}` changes what you would say or choose.",
     )
+
+
+def _compare_prompt_for(hypothesis: SoulLiteHypothesis) -> str:
+    prompts = {
+        Dimension.SOUL: "Which answer makes the same tradeoff under pressure?",
+        Dimension.BOUNDARIES: "Which answer has the more accurate refusal or exception boundary?",
+        Dimension.VOICE: "Which answer uses the human's actual wording, register, and length?",
+        Dimension.SKILL: "Which answer chooses the more realistic next operating move?",
+        Dimension.PEOPLE: "Which answer calibrates trust, risk, and responsibility more like the human?",
+    }
+    return prompts.get(
+        hypothesis.dimension,
+        "Which answer reveals a more specific decision pattern instead of generic good judgment?",
+    )
+
+
+def _counterexample_signal(hypothesis: SoulLiteHypothesis) -> str:
+    core = _strip_hypothesis_prefix(hypothesis.hypothesis)
+    return f"Ask for one time `{core}` was not true."
+
+
+def _pressure_signal(hypothesis: SoulLiteHypothesis) -> str:
+    if hypothesis.dimension == Dimension.VOICE:
+        return "Ask how the wording changes when angry, rushed, or speaking to a senior person."
+    if hypothesis.dimension == Dimension.PEOPLE:
+        return "Ask what happens when trust conflicts with delivery risk."
+    return "Ask what happens when time, money, status, or relationship pressure is high."
+
+
+def _exception_signal(hypothesis: SoulLiteHypothesis) -> str:
+    if hypothesis.dimension == Dimension.BOUNDARIES:
+        return "Ask the exact condition that would make an exception acceptable."
+    if hypothesis.dimension == Dimension.SOUL:
+        return "Ask which higher value can override this value."
+    return "Ask when this pattern should be suspended."
+
+
+def _exact_wording_signal(hypothesis: SoulLiteHypothesis) -> str:
+    if hypothesis.dimension == Dimension.VOICE:
+        return "Collect the exact LINE / email sentence the user would send."
+    return "Ask the user to rewrite the persona answer in their own words."
+
+
+def _decision_tradeoff_signal(hypothesis: SoulLiteHypothesis) -> str:
+    if hypothesis.dimension == Dimension.SKILL:
+        return "Ask what they would sacrifice first: speed, quality, scope, or relationship."
+    if hypothesis.dimension == Dimension.PEOPLE:
+        return "Ask what evidence makes them increase or reduce trust."
+    if hypothesis.dimension == Dimension.BOUNDARIES:
+        return "Ask what they would protect even if the opportunity is attractive."
+    return "Ask what they chose against, not only what they chose for."
 
 
 def _dimension_for_triple(triple: PersonaTriple) -> Dimension:
@@ -453,4 +590,3 @@ def _provenance(evidence: EvidenceItem) -> str:
         turns = ",".join(str(turn_id) for turn_id in evidence.source_turn_ids)
         parts.append(f"turns={turns}")
     return f"; {'; '.join(parts)}" if parts else ""
-

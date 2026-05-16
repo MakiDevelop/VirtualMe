@@ -68,6 +68,10 @@ async def test_render_soul_lite_marks_hypotheses_as_draft(tmp_path):
     text = render_soul_lite(bundle)
 
     assert "hypothesis draft" in text
+    assert "## Top-Level Sketch" in text
+    assert "Communication surface: speaks bluntly" in text
+    assert "Quality warning: all hypotheses are low confidence" in text
+    assert "Low-confidence hypotheses: 1/1" in text
     assert "speaks bluntly" in text
     assert "Missing evidence" in text
     assert "Suggested follow-up" in text
@@ -102,9 +106,18 @@ async def test_mini_blind_test_and_feedback_routing_reference_hypotheses(tmp_pat
     blind = render_mini_blind_test(bundle)
     routing = render_feedback_routing(bundle)
 
-    assert "| T1 | PEOPLE |" in blind
+    assert "| T1 | PEOPLE | A partner's reliability is uncertain" in blind
+    assert "Which answer calibrates trust, risk, and responsibility more like the human?" in blind
+    assert "Exact unlike-me phrase" in blind
+    assert "Missing decision signal" in blind
     assert "Based on H1" in blind
     assert "mark PEOPLE as needing re-interview" in routing
+    assert "Counterexample to collect" in routing
+    assert "Pressure signal" in routing
+    assert "Exception signal" in routing
+    assert "Exact wording signal" in routing
+    assert "Decision tradeoff signal" in routing
+    assert "Ask what evidence makes them increase or reduce trust." in routing
 
 
 async def test_snapshot_rescrubs_pii(tmp_path):
