@@ -58,9 +58,10 @@ def load_question_pool(path: str | Path | None = None) -> dict[int, list[Questio
     source = default_question_pool_path() if path is None else Path(path)
     raw = yaml.safe_load(source.read_text(encoding="utf-8")) or []
     items = _question_items(raw)
+    placeholders = _default_placeholders(raw)
     pool: dict[int, list[Question]] = {}
     for item in items:
-        question = Question(**item)
+        question = Question(**_substitute_placeholders(item, placeholders))
         pool.setdefault(question.week, []).append(question)
     return pool
 
@@ -73,6 +74,33 @@ def _question_items(raw: Any) -> list[dict[str, Any]]:
         if isinstance(questions, list):
             return questions
     raise ValueError("question pool YAML must be a list or contain a questions list")
+
+
+def _default_placeholders(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    placeholders = raw.get("default_placeholders", {})
+    if not isinstance(placeholders, dict):
+        return {}
+    return {str(key): str(value) for key, value in placeholders.items()}
+
+
+def _substitute_placeholders(
+    item: dict[str, Any], placeholders: dict[str, str]
+) -> dict[str, Any]:
+    if not placeholders:
+        return item
+    substituted = dict(item)
+    for field in ("text", "rationale_probe"):
+        value = substituted.get(field)
+        if isinstance(value, str):
+            substituted[field] = value.format_map(_SafePlaceholderMap(placeholders))
+    return substituted
+
+
+class _SafePlaceholderMap(dict[str, str]):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
 
 
 def _flatten(pool: dict[int, list[Question]]) -> list[Question]:

@@ -406,6 +406,7 @@ async def _handle_light_greeting(
     progress_prefix = _progress_resume_prefix(completeness.total_score)
     last_asked = await db.get_last_assistant_content(session.id)
     if last_asked:
+        last_asked = _clean_resume_question(last_asked)
         reply = (
             f"{progress_prefix}\n"
             f"我們目前在【{DIMENSION_LABELS[question.dimension]}】這一塊。\n"
@@ -420,6 +421,15 @@ async def _handle_light_greeting(
         )
     await db.save_turn(session.id, "assistant", reply)
     return reply
+
+
+def _clean_resume_question(content: str) -> str:
+    cleaned = content.strip()
+    if "我先記下這點" in cleaned and "我們回到剛才這題" in cleaned:
+        return cleaned.split("\n", 1)[-1].strip()
+    if cleaned.startswith("我們先回到剛才這題。"):
+        return cleaned.split("\n", 1)[-1].strip()
+    return cleaned
 
 
 def _progress_resume_prefix(total_score: float) -> str:

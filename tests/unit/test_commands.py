@@ -18,6 +18,8 @@ def test_detect_status_query():
     assert isinstance(detect_command("我們收集到哪一塊了"), StatusQuery)
     assert isinstance(detect_command("萃取進度"), StatusQuery)
     assert isinstance(detect_command("有哪些主題"), StatusQuery)
+    assert isinstance(detect_command("目前訪談的進度如何" + "\uff1f"), StatusQuery)
+    assert isinstance(detect_command("上面的訪談是針對哪一個人格主題" + "\uff1f"), StatusQuery)
     assert isinstance(detect_command("which dimension are we on"), StatusQuery)
 
 
@@ -212,6 +214,27 @@ async def test_process_turn_light_greeting_resumes_known_progress(tmp_path):
     assert "剛才問的是" in reply
     assert "請談談你的說話方式。" in reply
     assert await db.get_current_question_id(session.id) == "QV"
+
+
+async def test_process_turn_light_greeting_cleans_old_bridge_prefix(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.HISTORY, text="History question")]}
+    )
+    settings = Settings(anthropic_api_key=SecretStr("k"))
+    session = await db.get_or_create_session("u1", week=1)
+    await db.set_current_question_id(session.id, "Q1")
+    await db.save_turn(
+        session.id,
+        "assistant",
+        "可以" + "\uff0c" + "我先記下這點。我們回到剛才這題。\n真正的問題",
+    )
+
+    reply = await process_turn("u1", "哈囉", _Claude(), db, selector, settings)
+
+    assert "人生歷程" in reply
+    assert "真正的問題" in reply
+    assert "我先記下這點" not in reply
 
 
 async def test_process_turn_light_greeting_mid_progress_asks_to_continue(tmp_path):

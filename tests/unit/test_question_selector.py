@@ -210,6 +210,9 @@ def test_load_packaged_question_pool_uses_current_yaml_shape():
     assert 1 in pool
     assert pool[1][0].id == "H1"
     assert pool[1][0].dimension == Dimension.HISTORY
+    all_text = "\n".join(question.text for questions in pool.values() for question in questions)
+    assert "{decision_partner}" not in all_text
+    assert "the person you negotiate scope or budget with" in all_text
 
 
 def test_load_question_pool_supports_legacy_root_list(tmp_path):
@@ -227,6 +230,27 @@ def test_load_question_pool_supports_legacy_root_list(tmp_path):
     pool = load_question_pool(path)
 
     assert pool[1][0].id == "Q1"
+
+
+def test_load_question_pool_substitutes_default_placeholders(tmp_path):
+    path = tmp_path / "questions.yaml"
+    path.write_text(
+        """
+        version: 1
+        questions:
+          - id: Q1
+            week: 1
+            dimension: SKILL
+            text: Ask {decision_partner} about {missing_placeholder}.
+        default_placeholders:
+          decision_partner: scope partner
+        """,
+        encoding="utf-8",
+    )
+
+    pool = load_question_pool(path)
+
+    assert pool[1][0].text == "Ask scope partner about {missing_placeholder}."
 
 
 def test_load_question_pool_rejects_invalid_shape(tmp_path):
