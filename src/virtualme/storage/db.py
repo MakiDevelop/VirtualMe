@@ -113,6 +113,26 @@ class Subject(BaseModel):
     updated_at: str | None = None
 
 
+class ChecklistItem(BaseModel):
+    interviewee_id: str
+    item_key: str
+    label: str
+    done: bool = False
+    note: str | None = None
+    updated_at: str | None = None
+
+
+POC_CHECKLIST_TEMPLATE: list[tuple[str, str]] = [
+    ("extraction_sessions", "完成萃取對話（adaptive 模式）"),  # noqa: RUF001
+    ("voice_boundaries_coverage", "VOICE / BOUNDARIES 覆蓋達標"),
+    ("persona_exported", "persona 匯出"),
+    ("responder_deployed", "responder 部署"),
+    ("scorecard_pass", "12 則 scorecard：voice+acceptability ≥ 8/12"),  # noqa: RUF001
+    ("correctness_clean", "correctness 零「自信講錯」嚴重案例"),
+    ("go_nogo_recorded", "go / no-go 結論已記錄"),
+]
+
+
 def _schema_path() -> Path:
     return Path(__file__).with_name("schema.sql")
 
@@ -314,6 +334,85 @@ class DB:
         if row is None:
             raise ValueError(f"subject not found: {interviewee_id}")
         return _subject_from_row(row)
+
+    async def seed_poc_checklist(self, interviewee_id: str) -> list[ChecklistItem]:
+        await self.init()
+        async with self._connect() as conn:
+            await conn.executemany(
+                """
+                INSERT OR IGNORE INTO checklist_items(interviewee_id, item_key, label)
+                VALUES (?, ?, ?)
+                """,
+                [
+                    (interviewee_id, item_key, label)
+                    for item_key, label in POC_CHECKLIST_TEMPLATE
+                ],
+            )
+            await conn.commit()
+        return await self.get_checklist(interviewee_id)
+
+    async def get_checklist(self, interviewee_id: str) -> list[ChecklistItem]:
+        await self.init()
+        async with self._connect() as conn:
+            conn.row_factory = aiosqlite.Row
+            cur = await conn.execute(
+                "SELECT * FROM checklist_items WHERE interviewee_id = ?",
+                (interviewee_id,),
+            )
+            rows = await cur.fetchall()
+
+        by_key = {row["item_key"]: row for row in rows}
+        return [
+            _checklist_item_from_row(by_key[item_key])
+            for item_key, _label in POC_CHECKLIST_TEMPLATE
+            if item_key in by_key
+        ]
+
+    async def set_checklist_item(
+        self,
+        interviewee_id: str,
+        item_key: str,
+        done: bool,
+        note: str | None = None,
+    ) -> ChecklistItem:
+        await self.init()
+        async with self._connect() as conn:
+            conn.row_factory = aiosqlite.Row
+            if note is None:
+                await conn.execute(
+                    """
+                    UPDATE checklist_items
+                    SET done = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE interviewee_id = ? AND item_key = ?
+                    """,
+                    (int(done), interviewee_id, item_key),
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE checklist_items
+                    SET done = ?,
+                        note = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE interviewee_id = ? AND item_key = ?
+                    """,
+                    (int(done), note, interviewee_id, item_key),
+                )
+            await conn.commit()
+            row = await (
+                await conn.execute(
+                    """
+                    SELECT * FROM checklist_items
+                    WHERE interviewee_id = ? AND item_key = ?
+                    """,
+                    (interviewee_id, item_key),
+                )
+            ).fetchone()
+
+        if row is None:
+            raise ValueError(f"checklist item not found: {interviewee_id}/{item_key}")
+        return _checklist_item_from_row(row)
 
     async def get_or_create_session(self, interviewee_id: str, week: int) -> Session:
         await self.init()
@@ -811,6 +910,17 @@ def _subject_from_row(row: aiosqlite.Row) -> Subject:
         goal=row["goal"],
         status=SubjectStatus(row["status"]),
         created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _checklist_item_from_row(row: aiosqlite.Row) -> ChecklistItem:
+    return ChecklistItem(
+        interviewee_id=row["interviewee_id"],
+        item_key=row["item_key"],
+        label=row["label"],
+        done=bool(row["done"]),
+        note=row["note"],
         updated_at=row["updated_at"],
     )
 

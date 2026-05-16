@@ -93,3 +93,13 @@ CREATE TABLE IF NOT EXISTS subjects (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS checklist_items (
+    interviewee_id TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (interviewee_id, item_key)
+);

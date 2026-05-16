@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from virtualme.storage.db import Anchor, Dimension, Subject
+from virtualme.storage.db import Anchor, ChecklistItem, Dimension, Subject
 
 # HR PoC: VOICE / BOUNDARIES are extraction priorities.
 DIMENSION_WEIGHTS: dict[Dimension, int] = {
@@ -48,6 +48,17 @@ def render_subject_md(subject: Subject) -> str:
         f"- Updated at: {subject.updated_at or ''}",
         "",
     ]
+    return "\n".join(lines)
+
+
+def render_checklist_md(items: list[ChecklistItem]) -> str:
+    lines = []
+    for item in items:
+        checkbox = "x" if item.done else " "
+        line = f"- [{checkbox}] {item.label}"
+        if item.note:
+            line = f"{line} - {item.note}"
+        lines.append(line)
     return "\n".join(lines)
 
 
