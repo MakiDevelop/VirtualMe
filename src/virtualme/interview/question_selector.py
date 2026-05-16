@@ -82,9 +82,24 @@ def _flatten(pool: dict[int, list[Question]]) -> list[Question]:
 
 def _neighbor_dimension(answer: str) -> Dimension | None:
     lowered = answer.lower()
-    if any(word in lowered for word in ("client", "customer", "stakeholder")):
+    if any(
+        word in lowered
+        for word in (
+            "client",
+            "customer",
+            "stakeholder",
+            "客戶",
+            "顧客",
+            "對方",
+            "客人",
+            "利害關係人",
+        )
+    ):
         return Dimension.PEOPLE
-    if any(word in lowered for word in ("write", "build", "sell", "teach")):
+    if any(
+        word in lowered
+        for word in ("write", "build", "sell", "teach", "寫", "賣", "教", "設計", "建立", "打造")
+    ):
         return Dimension.SKILL
     return None
 

@@ -49,6 +49,12 @@ async def test_stage2_retrieval_returns_top_k_by_cosine_similarity():
     assert retrieved == [triples[0]]
 
 
+async def test_stage2_retrieval_returns_cjk_triple_by_cosine_similarity():
+    triples = [_triple("我重視誠實信任"), _triple("週末安靜休息")]
+    retrieved = await _stage2_retrieve("誠實信任很重要", triples, k=1, threshold=0.1)
+    assert retrieved == [triples[0]]
+
+
 async def test_stage3_prompt_contains_retrieved_triples():
     claude = _Claude(["direct response", "refined response"])
     triples = [_triple("direct communication")]

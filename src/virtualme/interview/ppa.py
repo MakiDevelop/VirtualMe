@@ -1,11 +1,11 @@
 import json
 import math
-import re
 from collections import Counter
 
 from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
+from virtualme.interview.lang import tokens
 from virtualme.interview.triples import PersonaTriple
 
 
@@ -84,7 +84,7 @@ async def _stage3_refine(
 
 
 def _vector(text: str) -> Counter[str]:
-    return Counter(re.findall(r"[a-z0-9_]+", text.lower()))
+    return Counter(tokens(text))
 
 
 def _cosine(left: Counter[str], right: Counter[str]) -> float:

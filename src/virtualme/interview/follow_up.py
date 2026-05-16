@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from anthropic import AsyncAnthropic
 
+from virtualme.interview.lang import length_units, tokens
 from virtualme.storage.db import Anchor, Layer
 
 
@@ -13,14 +14,31 @@ class FollowUpRule(StrEnum):
     R5_REPEAT_TO_TRIANGULATE = "R5"
 
 
-ABSTRACT_MARKERS = {"honesty", "trust", "directness", "quality", "freedom", "respect"}
+ABSTRACT_MARKERS = {
+    "honesty",
+    "trust",
+    "directness",
+    "quality",
+    "freedom",
+    "respect",
+    "誠實",
+    "信任",
+    "正直",
+    "直接",
+    "坦白",
+    "品質",
+    "自由",
+    "尊重",
+    "誠信",
+    "真誠",
+}
 
 
 def select_rule(
     answer: str, depth: Layer, accumulated_anchors: list[Anchor]
 ) -> FollowUpRule | None:
     normalized = answer.lower()
-    if any(marker in normalized for marker in ABSTRACT_MARKERS) and len(answer.split()) <= 14:
+    if any(marker in normalized for marker in ABSTRACT_MARKERS) and length_units(answer) <= 14:
         return FollowUpRule.R4_ABSTRACT_TO_CONCRETE
     if depth == Layer.FACT:
         return FollowUpRule.R1_FACT_TO_PATTERN
@@ -59,11 +77,11 @@ def _has_triangulated_repeat(answer: str, anchors: list[Anchor]) -> bool:
     Triangulation requires the principle to be surfaced in at least 3 DIFFERENT questions,
     not just 3 turns. We count unique source_question_ids to enforce this.
     """
-    words = set(answer.lower().split())
+    words = set(tokens(answer))
     for anchor in anchors:
         if anchor.layer != Layer.PRINCIPLE:
             continue
-        overlap = words & set(anchor.content.lower().split())
+        overlap = words & set(tokens(anchor.content))
         if len(overlap) < 4:
             continue
         # Count unique question IDs — triangulation needs 3 different questions
@@ -75,5 +93,22 @@ def _has_triangulated_repeat(answer: str, anchors: list[Anchor]) -> bool:
 
 def _has_concrete_example(answer: str) -> bool:
     lowered = answer.lower()
-    markers = ("once", "yesterday", "last ", "when ", "client", "manager", "case")
+    markers = (
+        "once",
+        "yesterday",
+        "last ",
+        "when ",
+        "client",
+        "manager",
+        "case",
+        "有一次",
+        "上次",
+        "之前",
+        "那時",
+        "當時",
+        "客戶",
+        "主管",
+        "案子",
+        "記得",
+    )
     return any(marker in lowered for marker in markers)
