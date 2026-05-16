@@ -1,0 +1,124 @@
+# Engine evaluation fixtures: curated interview turns with the expected
+# depth classification and follow-up rule. Bilingual (English + CJK) to
+# guard the CJK routing path. Append cases as the engine evolves.
+cases:
+  - id: F01
+    question: "What happened in your last project?"
+    answer: "We shipped the release on Tuesday."
+    expected_depth: fact
+    expected_rule: R1
+  - id: F02
+    question: "What did you do after the client complained?"
+    answer: "I sent the revised proposal yesterday."
+    expected_depth: fact
+    expected_rule: R1
+  - id: F03
+    question: "How did the planning meeting end?"
+    answer: "The manager moved the launch to Friday."
+    expected_depth: fact
+    expected_rule: R1
+  - id: F04
+    question: "What do you usually do when priorities conflict?"
+    answer: "I usually pick the task with the nearest deadline."
+    expected_depth: pattern
+    expected_rule: R2
+  - id: F05
+    question: "How do you work with unclear requests?"
+    answer: "I tend to ask for examples before I estimate the work."
+    expected_depth: pattern
+    expected_rule: R2
+  - id: F06
+    question: "How do you handle feedback?"
+    answer: "I normally write down the concern first, then decide what to change."
+    expected_depth: pattern
+    expected_rule: R2
+  - id: F07
+    question: "What matters most in collaboration?"
+    answer: "Honesty matters."
+    expected_depth: principle
+    expected_rule: R4
+  - id: F08
+    question: "What makes a team healthy?"
+    answer: "Trust is the base."
+    expected_depth: principle
+    expected_rule: R4
+  - id: F09
+    question: "What principle guides your decisions?"
+    answer: "Respect creates room for better work."
+    expected_depth: principle
+    expected_rule: R4
+  - id: F10
+    question: "What do you value when the schedule is tight?"
+    answer: "Clear tradeoffs matter more than pretending everything can fit."
+    expected_depth: principle
+    expected_rule: R3
+  - id: F11
+    question: "What do you expect from a lead?"
+    answer: "A lead should protect focus and make ownership explicit."
+    expected_depth: principle
+    expected_rule: R3
+  - id: F12
+    question: "What kind of decisions do you trust?"
+    answer: "I believe decisions are stronger when a client case exposes the tradeoff."
+    expected_depth: principle
+    expected_rule:
+  - id: C01
+    question: "上次專案發生了什麼事？"
+    answer: "我們週二把版本送出去了。"
+    expected_depth: fact
+    expected_rule: R1
+  - id: C02
+    question: "客戶臨時改需求時你做了什麼？"
+    answer: "我當時先把影響範圍整理成一頁。"
+    expected_depth: fact
+    expected_rule: R1
+  - id: C03
+    question: "會議最後怎麼決定？"
+    answer: "主管把上線日改到下週一。"
+    expected_depth: fact
+    expected_rule: R1
+  - id: C04
+    question: "你通常怎麼決定先做什麼？"
+    answer: "我通常先處理會卡住別人的工作。"
+    expected_depth: pattern
+    expected_rule: R2
+  - id: C05
+    question: "面對模糊需求時你會怎麼做？"
+    answer: "我會先問具體例子，再排優先順序。"
+    expected_depth: pattern
+    expected_rule: R2
+  - id: C06
+    question: "你怎麼處理回饋？"
+    answer: "我習慣先確認對方真正擔心的是什麼。"
+    expected_depth: pattern
+    expected_rule: R2
+  - id: C07
+    question: "你覺得工作上什麼最重要？"
+    answer: "誠實最重要。"
+    expected_depth: principle
+    expected_rule: R4
+  - id: C08
+    question: "你怎麼看團隊合作？"
+    answer: "信任是基礎。"
+    expected_depth: principle
+    expected_rule: R4
+  - id: C09
+    question: "你希望別人怎麼溝通？"
+    answer: "直接一點比較好。"
+    expected_depth: principle
+    expected_rule: R4
+  - id: C10
+    question: "你做決策時最重視什麼？"
+    answer: "我重視透明，因為大家要知道代價在哪裡。"
+    expected_depth: principle
+    expected_rule: R3
+  - id: C11
+    question: "什麼樣的合作你最放心？"
+    answer: "有一次客戶把問題講清楚，後面合作就順很多。"
+    expected_depth: principle
+    expected_rule:
+  - id: C12
+    question: "什麼樣的領導方式最有效？"
+    answer: "好的領導要讓責任清楚，也要保護團隊的專注。"
+    expected_depth: principle
+    expected_rule: R3
