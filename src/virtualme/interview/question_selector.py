@@ -20,7 +20,9 @@ class QuestionSelector:
         last_answer: str | None,
         accumulated_anchors: dict[Dimension, list[Anchor]],
         energy: int,
+        asked_question_ids: set[str] | None = None,
     ) -> Question | None:
+        asked = asked_question_ids or set()
         if _has_unexplored_layer(accumulated_anchors):
             return None
         questions = self.question_pool.get(session.week) or _flatten(self.question_pool)
@@ -28,19 +30,20 @@ class QuestionSelector:
             return None
         if energy < 3:
             light = [q for q in questions if q.energy_tax == "low"]
-            return _prefer_dimension(light or questions, Dimension.STATE)
+            return _prefer_dimension(light or questions, Dimension.STATE, asked)
         if last_answer:
             neighbor = _neighbor_dimension(last_answer)
             if neighbor:
-                match = _prefer_dimension(questions, neighbor)
+                match = _prefer_dimension(questions, neighbor, asked)
                 if match:
                     return match
         if random.random() < 0.1:
-            state = _prefer_dimension(questions, Dimension.STATE)
+            state = _prefer_dimension(questions, Dimension.STATE, asked)
             if state:
                 return state
         target = _biggest_gap(accumulated_anchors, questions)
-        return _prefer_dimension(questions, target) or questions[0]
+        fallback = next((question for question in questions if question.id not in asked), questions[0])
+        return _prefer_dimension(questions, target, asked) or fallback
 
 
 def default_question_pool_path() -> Path:
@@ -110,5 +113,10 @@ def _biggest_gap(anchors: dict[Dimension, list[Anchor]], questions: list[Questio
     return min(counts, key=counts.get)
 
 
-def _prefer_dimension(questions: list[Question], dimension: Dimension) -> Question | None:
-    return next((question for question in questions if question.dimension == dimension), None)
+def _prefer_dimension(
+    questions: list[Question], dimension: Dimension, asked: set[str]
+) -> Question | None:
+    same_dim = [question for question in questions if question.dimension == dimension]
+    unasked = [question for question in same_dim if question.id not in asked]
+    pool = unasked or same_dim
+    return pool[0] if pool else None

@@ -57,8 +57,10 @@ async def process_turn(
     await db.save_redactions(user_turn.id, scrub_result.redactions)
 
     anchors_by_dimension = await db.load_anchors_summary(interviewee_id)
+    asked_question_ids = await db.load_asked_question_ids(interviewee_id)
     current_question = await _resolve_current_question(db, selector, session.id, session.week)
     depth = await evaluate_depth(scrub_result.scrubbed_text, current_question.text, claude)
+    await db.record_question_answered(interviewee_id, current_question.id, session.week, depth.value)
     all_anchors = [anchor for anchors in anchors_by_dimension.values() for anchor in anchors]
     rule = select_rule(scrub_result.scrubbed_text, depth, all_anchors)
     if rule and depth != Layer.PRINCIPLE:
@@ -79,9 +81,11 @@ async def process_turn(
             scrub_result.scrubbed_text,
             anchors_by_dimension,
             energy=5,
+            asked_question_ids=asked_question_ids,
         )
         if next_question is not None:
             await db.set_current_question_id(session.id, next_question.id)
+            await db.record_question_asked(interviewee_id, next_question.id, session.week)
         if settings.use_ppa:
             from virtualme.interview.ppa import ppa_response
             from virtualme.interview.reinjection import build_reinjection_anchor, should_reinject

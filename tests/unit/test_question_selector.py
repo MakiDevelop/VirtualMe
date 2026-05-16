@@ -48,6 +48,70 @@ def test_picks_biggest_gap_dimension():
     assert selector.select_next(_session(), None, anchors, energy=5).dimension == Dimension.SKILL
 
 
+def test_prefers_unasked_question_in_target_dimension():
+    selector = QuestionSelector(
+        {
+            1: [
+                _question("S1", Dimension.SKILL),
+                _question("S2", Dimension.SKILL),
+                _question("H1", Dimension.HISTORY),
+            ]
+        }
+    )
+    anchors = {
+        Dimension.HISTORY: [
+            Anchor(
+                interviewee_id="u1",
+                dimension=Dimension.HISTORY,
+                layer=Layer.PRINCIPLE,
+                content="history principle",
+            )
+        ]
+    }
+
+    selected = selector.select_next(
+        _session(),
+        None,
+        anchors,
+        energy=5,
+        asked_question_ids={"S1"},
+    )
+
+    assert selected.id == "S2"
+
+
+def test_target_dimension_falls_back_when_all_matching_questions_were_asked():
+    selector = QuestionSelector(
+        {
+            1: [
+                _question("S1", Dimension.SKILL),
+                _question("S2", Dimension.SKILL),
+                _question("H1", Dimension.HISTORY),
+            ]
+        }
+    )
+    anchors = {
+        Dimension.HISTORY: [
+            Anchor(
+                interviewee_id="u1",
+                dimension=Dimension.HISTORY,
+                layer=Layer.PRINCIPLE,
+                content="history principle",
+            )
+        ]
+    }
+
+    selected = selector.select_next(
+        _session(),
+        None,
+        anchors,
+        energy=5,
+        asked_question_ids={"S1", "S2"},
+    )
+
+    assert selected.id == "S1"
+
+
 def test_low_energy_switches_to_light_topic():
     selector = QuestionSelector(
         {

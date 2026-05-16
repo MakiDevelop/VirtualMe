@@ -248,6 +248,53 @@ class DB:
             )
             await conn.commit()
 
+    async def record_question_asked(
+        self, interviewee_id: str, question_id: str, week: int
+    ) -> None:
+        async with self._connect() as conn:
+            await conn.execute(
+                """
+                INSERT INTO question_state(
+                    interviewee_id, question_id, week, asked_count, last_asked_at
+                )
+                VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(interviewee_id, question_id)
+                DO UPDATE SET
+                    asked_count = asked_count + 1,
+                    last_asked_at = CURRENT_TIMESTAMP,
+                    week = excluded.week
+                """,
+                (interviewee_id, question_id, week),
+            )
+            await conn.commit()
+
+    async def record_question_answered(
+        self, interviewee_id: str, question_id: str, week: int, depth: str
+    ) -> None:
+        async with self._connect() as conn:
+            await conn.execute(
+                """
+                INSERT INTO question_state(
+                    interviewee_id, question_id, week, asked_count, answered_depth
+                )
+                VALUES (?, ?, ?, 0, ?)
+                ON CONFLICT(interviewee_id, question_id)
+                DO UPDATE SET answered_depth = excluded.answered_depth
+                """,
+                (interviewee_id, question_id, week, depth),
+            )
+            await conn.commit()
+
+    async def load_asked_question_ids(self, interviewee_id: str) -> set[str]:
+        async with self._connect() as conn:
+            cur = await conn.execute(
+                "SELECT question_id FROM question_state "
+                "WHERE interviewee_id = ? AND asked_count > 0",
+                (interviewee_id,),
+            )
+            rows = await cur.fetchall()
+        return {row[0] for row in rows}
+
     async def save_turn(self, session_id: int, role: str, content: str) -> Turn:
         digest = hashlib.sha256(f"{session_id}:{role}:{content}".encode()).hexdigest()
         async with self._connect() as conn:
