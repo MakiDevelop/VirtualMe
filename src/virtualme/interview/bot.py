@@ -110,7 +110,9 @@ async def process_turn(
         scrub_result.scrubbed_text, current_question.text, active_client
     )
     if assessment.parse_failed:
-        reply = _restate_current_question(current_question)
+        reply = await _restate_current_question(
+            interviewee_id, current_question, active_client, db
+        )
         await db.save_turn(session.id, "assistant", reply)
         return reply
     if assessment.kind == TurnKind.META:
@@ -275,8 +277,12 @@ async def _handle_non_answer(
     )
     if count < 2:
         if is_meta:
-            return _bridge_to_current_question(user_text, current_question)
-        return _rapport_to_current_question(current_question)
+            return await _bridge_to_current_question(
+                interviewee_id, user_text, current_question, active_client, db
+            )
+        return await _rapport_to_current_question(
+            interviewee_id, current_question, active_client, db
+        )
 
     next_question = selector.select_next(
         session,
@@ -289,28 +295,43 @@ async def _handle_non_answer(
     await db.reset_question_non_answer(interviewee_id, current_question.id)
     if next_question is None:
         if is_meta:
-            return _bridge_to_current_question(user_text, current_question)
-        return _rapport_to_current_question(current_question)
+            return await _bridge_to_current_question(
+                interviewee_id, user_text, current_question, active_client, db
+            )
+        return await _rapport_to_current_question(
+            interviewee_id, current_question, active_client, db
+        )
 
     await db.set_current_question_id(session.id, next_question.id)
     await db.record_question_asked(interviewee_id, next_question.id, session.week)
     return await _final_reply(interviewee_id, next_question, active_client, db)
 
 
-def _restate_current_question(question: Question) -> str:
-    return f"我先回到剛才這題：{question.text}"  # noqa: RUF001
+async def _restate_current_question(
+    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+) -> str:
+    # Re-ask via _final_reply so the question is rendered in Traditional Chinese
+    # — the English question-pool text must never reach the interviewee.
+    asked = await _final_reply(interviewee_id, question, claude, db)
+    return f"我們先回到剛才這題。\n{asked}"
 
 
-def _bridge_to_current_question(user_text: str, question: Question) -> str:
+async def _bridge_to_current_question(
+    interviewee_id: str, user_text: str, question: Question, claude: AsyncAnthropic, db: DB
+) -> str:
     if _asks_for_traditional_chinese(user_text):
         prefix = "可以，我們用繁體中文。"  # noqa: RUF001
     else:
         prefix = "可以，我先記下這點。"  # noqa: RUF001
-    return f"{prefix}回到剛才這題：{question.text}"  # noqa: RUF001
+    asked = await _final_reply(interviewee_id, question, claude, db)
+    return f"{prefix}我們回到剛才這題。\n{asked}"
 
 
-def _rapport_to_current_question(question: Question) -> str:
-    return f"我懂，這題先不用想太複雜。回到剛才這題：{question.text}"  # noqa: RUF001
+async def _rapport_to_current_question(
+    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+) -> str:
+    asked = await _final_reply(interviewee_id, question, claude, db)
+    return f"我懂，這題先不用想太複雜。\n{asked}"  # noqa: RUF001
 
 
 def _asks_for_traditional_chinese(text: str) -> bool:
