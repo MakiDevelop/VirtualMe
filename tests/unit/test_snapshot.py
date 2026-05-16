@@ -2,6 +2,9 @@ from pydantic import ValidationError
 
 from virtualme.snapshot.__main__ import main
 from virtualme.snapshot.core import (
+    ConstructCard,
+    EvidenceItem,
+    _finalize_construct_card,
     build_snapshot_bundle,
     export_snapshot,
     render_feedback_routing,
@@ -77,13 +80,14 @@ async def test_render_soul_lite_marks_hypotheses_as_draft(tmp_path):
     assert "Suggested follow-up" in text
 
 
-async def test_snapshot_exports_three_files(tmp_path):
+async def test_snapshot_exports_construct_cards_file(tmp_path):
     db = await _new_db(tmp_path)
     await db.save_anchor("u1", Dimension.BOUNDARIES, Layer.PRINCIPLE, "rejects vague scope", [1], ["Q1"])
 
     paths = await export_snapshot(db, "u1", tmp_path / "exports")
 
     assert {path.name for path in paths} == {
+        "construct-cards.md",
         "SOUL-lite.md",
         "mini-blind-test.md",
         "feedback-routing.md",
@@ -110,7 +114,7 @@ async def test_mini_blind_test_and_feedback_routing_reference_hypotheses(tmp_pat
     assert "Which answer calibrates trust, risk, and responsibility more like the human?" in blind
     assert "Exact unlike-me phrase" in blind
     assert "Missing decision signal" in blind
-    assert "Based on H1" in blind
+    assert "Fallback from H1" in blind
     assert "mark PEOPLE as needing re-interview" in routing
     assert "Counterexample to collect" in routing
     assert "Pressure signal" in routing
@@ -150,10 +154,122 @@ async def test_mini_blind_test_varies_skill_scenarios_by_evidence(tmp_path):
     bundle = await build_snapshot_bundle(db, "u1")
     scenarios = [item.scenario for item in bundle.mini_blind_test]
 
-    assert any("cutting budget" in scenario for scenario in scenarios)
-    assert any("handoff is vague" in scenario for scenario in scenarios)
-    assert any("discount request as friendship" in scenario for scenario in scenarios)
+    assert any("family event" in scenario for scenario in scenarios)
+    assert any("community kitchen" in scenario for scenario in scenarios)
+    assert any("relative" in scenario and "shared trip" in scenario for scenario in scenarios)
+    assert all("budget scope and schedule" not in scenario for scenario in scenarios)
     assert len(set(scenarios)) == len(scenarios)
+
+
+async def test_construct_card_triangle_schema_and_confidence_rules(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+
+    assert bundle.construct_cards
+    card = bundle.construct_cards[0]
+    assert card.trigger_context
+    assert card.protected_value == "delivery realism"
+    assert card.falsifier
+    assert "exception" in card.missing_evidence
+    assert card.extraction_method == "rule_based"
+    assert card.confidence_level == "draft"
+    assert card.confidence_checks["multi_anchor_support"] is False
+    assert card.policy_status == "espoused_only"
+    assert card.exception_rule is None
+    assert "exception" in card.feedback_routes
+    assert card.decision_rule != "uses project triangle language around budget scope and schedule"
+
+
+async def test_soul_lite_adds_synthesized_patterns_and_demotes_raw_appendix(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    text = render_soul_lite(await build_snapshot_bundle(db, "u1"))
+
+    assert "## Synthesized Patterns" in text
+    assert "Constraint triangle integrity" in text
+    assert "## Raw Hypotheses Appendix" in text
+    assert "These are source-level hypotheses retained for audit" in text
+
+
+async def test_feedback_routing_includes_construct_missing_evidence_categories(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    routing = render_feedback_routing(bundle)
+
+    assert "Construct Card Routes" in routing
+    assert "Construct-card missing evidence route: exception." in routing
+    assert "Construct-card missing evidence route: decision_tradeoff." in routing
+
+
+def test_raw_wrapper_risk_caps_construct_card_confidence():
+    card = ConstructCard(
+        id="C0",
+        title="Raw wrapper",
+        decision_rule="protect direct truth by choosing direct truth",
+        trigger_context="direct truth",
+        protected_value="direct truth",
+        traded_value=None,
+        default_action="choose direct truth",
+        refused_action=None,
+        exception_rule=None,
+        register=None,
+        falsifier="Would not choose direct truth.",
+        supporting_evidence=[
+            EvidenceItem(
+                kind="anchor",
+                dimension=Dimension.SOUL,
+                layer=Layer.PRINCIPLE,
+                content="direct truth choose direct truth protect direct truth",
+            )
+        ],
+        disconfirming_evidence=[],
+        source_anchor_ids=[],
+        source_turn_ids=[],
+        source_question_ids=[],
+        dimension_tags=[Dimension.SOUL],
+        confidence_level="draft",
+        confidence_reason="",
+        confidence_checks={},
+        missing_evidence=[],
+        blind_test_probe=None,
+        feedback_routes=[],
+        extraction_method="rule_based",
+        policy_status="espoused_only",
+        stability_scope=None,
+        context_dependence=None,
+        exception_archetype=None,
+    )
+
+    finalized = _finalize_construct_card(card)
+
+    assert finalized.confidence_level == "insufficient"
+    assert finalized.confidence_checks["raw_wrapper_safe"] is False
 
 
 async def test_snapshot_rescrubs_pii(tmp_path):

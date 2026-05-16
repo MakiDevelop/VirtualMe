@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -43,12 +45,55 @@ DECISION_KEYWORDS = (
     "時程",
 )
 
+_STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "when",
+    "with",
+    "you",
+    "your",
+    "而",
+    "的",
+    "了",
+    "和",
+    "是",
+    "在",
+    "我",
+    "你",
+    "他",
+    "她",
+    "它",
+}
+
+warnings.filterwarnings(
+    "ignore",
+    message='Field name "register" in "ConstructCard" shadows an attribute in parent "BaseModel"',
+    category=UserWarning,
+)
+
 
 class EvidenceItem(BaseModel):
     kind: str
     dimension: Dimension | None = None
     layer: Layer | None = None
     content: str
+    source_anchor_ids: list[int] = Field(default_factory=list)
     source_turn_ids: list[int] = Field(default_factory=list)
     source_question_ids: list[str] = Field(default_factory=list)
     confidence: float | None = None
@@ -73,10 +118,46 @@ class MiniBlindTestItem(BaseModel):
     evidence_hint: str
 
 
+class ConstructCard(BaseModel):
+    id: str
+    title: str
+    decision_rule: str
+    trigger_context: str
+    protected_value: str
+    traded_value: str | None = None
+    default_action: str
+    refused_action: str | None = None
+    exception_rule: str | None = None
+    register: str | None = None
+    falsifier: str
+    supporting_evidence: list[EvidenceItem]
+    disconfirming_evidence: list[EvidenceItem]
+    source_anchor_ids: list[int]
+    source_turn_ids: list[int]
+    source_question_ids: list[str]
+    dimension_tags: list[Dimension]
+    confidence_level: Literal["insufficient", "draft", "plausible", "validated"]
+    confidence_reason: str
+    confidence_checks: dict[str, bool]
+    missing_evidence: list[str]
+    blind_test_probe: str | None = None
+    feedback_routes: list[str]
+    extraction_method: Literal["rule_based", "llm_assisted", "human_curated"]
+    policy_status: Literal["espoused_only", "behavior_supported", "contradicted", "validated"]
+    stability_scope: str | None = None
+    context_dependence: str | None = None
+    exception_archetype: Literal[
+        "relational_credit",
+        "asymmetric_leverage",
+        "operational_reciprocity",
+    ] | None = None
+
+
 class SnapshotBundle(BaseModel):
     schema_version: str = SNAPSHOT_SCHEMA_VERSION
     interviewee_id: str
     generated_at: str
+    construct_cards: list[ConstructCard]
     hypotheses: list[SoulLiteHypothesis]
     mini_blind_test: list[MiniBlindTestItem]
     feedback_routes: list[str]
@@ -108,12 +189,14 @@ def build_snapshot_bundle_from_data(
 ) -> SnapshotBundle:
     generated_at = datetime.now(UTC).isoformat(timespec="seconds")
     hypotheses = _build_hypotheses(anchors, triples)
+    construct_cards = _build_construct_cards(hypotheses)
     return SnapshotBundle(
         interviewee_id=interviewee_id,
         generated_at=generated_at,
+        construct_cards=construct_cards,
         hypotheses=hypotheses,
-        mini_blind_test=_build_mini_blind_test(hypotheses),
-        feedback_routes=_build_feedback_routes(hypotheses),
+        mini_blind_test=_build_mini_blind_test(construct_cards, hypotheses),
+        feedback_routes=_build_feedback_routes(construct_cards, hypotheses),
     )
 
 
@@ -122,6 +205,7 @@ async def export_snapshot(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
     target = out_dir / interviewee_id / "snapshot"
     target.mkdir(parents=True, exist_ok=True)
     files = {
+        "construct-cards.md": render_construct_cards(bundle),
         "SOUL-lite.md": render_soul_lite(bundle),
         "mini-blind-test.md": render_mini_blind_test(bundle),
         "feedback-routing.md": render_feedback_routing(bundle),
@@ -157,13 +241,51 @@ def render_soul_lite(bundle: SnapshotBundle) -> str:
         f"- First blind-test target: {_first_review_target(bundle)}",
         "- Pass condition: the human can name why one answer is more like them, not just pick A/B.",
         "",
-        "## Hypotheses",
+        "## Synthesized Patterns",
         "",
     ]
+    if bundle.construct_cards:
+        for card in bundle.construct_cards:
+            lines.extend(
+                [
+                    f"### {card.id}: {card.title}",
+                    "",
+                    f"**Decision rule:** {card.decision_rule}",
+                    "",
+                    f"- Trigger context: {card.trigger_context}",
+                    f"- Protected value: {card.protected_value}",
+                    f"- Traded value: {card.traded_value or 'unknown'}",
+                    f"- Default action: {card.default_action}",
+                    f"- Refused action: {card.refused_action or 'unknown'}",
+                    f"- Exception rule: {card.exception_rule or 'unknown'}",
+                    f"- Policy status: {card.policy_status}",
+                    f"- Confidence: {card.confidence_level} ({card.confidence_reason})",
+                    f"- Falsifier: {card.falsifier}",
+                    f"- Missing evidence: {', '.join(card.missing_evidence) or 'none'}",
+                    "",
+                ]
+            )
+    else:
+        lines.extend(
+            [
+                "_No construct cards yet._",
+                "",
+                "Suggested next step: collect pressure, exception, and decision-tradeoff evidence.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Raw Hypotheses Appendix",
+            "",
+            "These are source-level hypotheses retained for audit. They are no longer the primary extraction unit.",
+            "",
+        ]
+    )
     if not bundle.hypotheses:
         lines.extend(
             [
-                "_No usable hypotheses yet._",
+                "_No usable raw hypotheses yet._",
                 "",
                 "Suggested next step: run more interview turns before generating Snapshot.",
             ]
@@ -189,6 +311,70 @@ def render_soul_lite(bundle: SnapshotBundle) -> str:
         for evidence in item.evidence:
             provenance = _provenance(evidence)
             lines.append(f"- [{evidence.kind}{provenance}] {evidence.content}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def render_construct_cards(bundle: SnapshotBundle) -> str:
+    lines = [
+        f"# Construct Cards: {bundle.interviewee_id}",
+        "",
+        f"- Schema version: {bundle.schema_version}",
+        f"- Generated at: {bundle.generated_at}",
+        "- Status: mechanism-first behavioral policy hypotheses, not verified personality truth",
+        "",
+    ]
+    if not bundle.construct_cards:
+        lines.extend(
+            [
+                "_No construct cards generated._",
+                "",
+                "Collect decision tradeoff, pressure, exception, and counterexample evidence.",
+            ]
+        )
+        return "\n".join(lines) + "\n"
+
+    for card in bundle.construct_cards:
+        lines.extend(
+            [
+                f"## {card.id}: {card.title}",
+                "",
+                f"- Decision rule: {card.decision_rule}",
+                f"- Trigger context: {card.trigger_context}",
+                f"- Protected value: {card.protected_value}",
+                f"- Traded value: {card.traded_value or 'unknown'}",
+                f"- Default action: {card.default_action}",
+                f"- Refused action: {card.refused_action or 'unknown'}",
+                f"- Exception rule: {card.exception_rule or 'unknown'}",
+                f"- Register: {card.register or 'unknown'}",
+                f"- Falsifier: {card.falsifier}",
+                f"- Dimension tags: {', '.join(dimension.value for dimension in card.dimension_tags)}",
+                f"- Confidence: {card.confidence_level}",
+                f"- Confidence reason: {card.confidence_reason}",
+                f"- Policy status: {card.policy_status}",
+                f"- Stability scope: {card.stability_scope or 'unknown'}",
+                f"- Context dependence: {card.context_dependence or 'unknown'}",
+                f"- Exception archetype: {card.exception_archetype or 'unknown'}",
+                f"- Extraction method: {card.extraction_method}",
+                f"- Missing evidence: {', '.join(card.missing_evidence) or 'none'}",
+                f"- Feedback routes: {', '.join(card.feedback_routes) or 'none'}",
+                f"- Blind-test probe: {card.blind_test_probe or 'unknown'}",
+                "",
+                "Confidence checks:",
+                "",
+            ]
+        )
+        for name, passed in card.confidence_checks.items():
+            lines.append(f"- {name}: {'yes' if passed else 'no'}")
+        lines.extend(["", "Supporting evidence:", ""])
+        for evidence in card.supporting_evidence:
+            lines.append(f"- [{evidence.kind}{_provenance(evidence)}] {evidence.content}")
+        if card.disconfirming_evidence:
+            lines.extend(["", "Disconfirming evidence:", ""])
+            for evidence in card.disconfirming_evidence:
+                lines.append(f"- [{evidence.kind}{_provenance(evidence)}] {evidence.content}")
+        else:
+            lines.extend(["", "Disconfirming evidence:", "", "- unknown"])
         lines.append("")
     return "\n".join(lines)
 
@@ -237,9 +423,31 @@ def render_feedback_routing(bundle: SnapshotBundle) -> str:
         "",
         "Use this when the user says `這不像我` or `不確定` during Snapshot review.",
         "",
-        "| Hypothesis | Dimension | If user rejects it | Counterexample to collect | Pressure signal | Exception signal | Exact wording signal | Decision tradeoff signal |",
+        "## Construct Card Routes",
+        "",
+        "| Card | Dimensions | Missing evidence | Counterexample | Pressure | Exception | Exact wording | Decision tradeoff |",
         "|---|---|---|---|---|---|---|---|",
     ]
+    for card in bundle.construct_cards:
+        routes = set(card.feedback_routes)
+        lines.append(
+            f"| {card.id} | {', '.join(dimension.value for dimension in card.dimension_tags)} | "
+            f"{', '.join(card.missing_evidence) or 'none'} | "
+            f"{_card_route(routes, 'counterexample')} | "
+            f"{_card_route(routes, 'pressure')} | "
+            f"{_card_route(routes, 'exception')} | "
+            f"{_card_route(routes, 'exact_wording')} | "
+            f"{_card_route(routes, 'decision_tradeoff')} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Raw Hypothesis Appendix Routes",
+            "",
+            "| Hypothesis | Dimension | If user rejects it | Counterexample to collect | Pressure signal | Exception signal | Exact wording signal | Decision tradeoff signal |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+    )
     for item in bundle.hypotheses:
         lines.append(
             f"| {item.id} | {item.dimension.value} | "
@@ -347,6 +555,7 @@ def _anchor_candidates(anchors: dict[Dimension, list[Anchor]]) -> list[_Candidat
                         dimension=dimension,
                         layer=anchor.layer,
                         content=content,
+                        source_anchor_ids=[anchor.id] if anchor.id is not None else [],
                         source_turn_ids=anchor.source_turn_ids,
                         source_question_ids=anchor.source_question_ids,
                     ),
@@ -397,8 +606,291 @@ def _candidate_to_hypothesis(index: int, candidate: _Candidate) -> SoulLiteHypot
     )
 
 
-def _build_mini_blind_test(hypotheses: list[SoulLiteHypothesis]) -> list[MiniBlindTestItem]:
+def _build_construct_cards(hypotheses: list[SoulLiteHypothesis]) -> list[ConstructCard]:
+    families = (
+        _triangle_construct,
+        _direct_conflict_construct,
+        _handoff_construct,
+        _emotional_blackmail_construct,
+        _attacker_motive_construct,
+    )
+    cards: list[ConstructCard] = []
+    used_hypotheses: set[str] = set()
+    for build_family in families:
+        matches = [item for item in hypotheses if build_family(item) is not None]
+        matches = [item for item in matches if item.id not in used_hypotheses]
+        if not matches:
+            continue
+        card = build_family(matches[0])
+        if card is None:
+            continue
+        card = _finalize_construct_card(card)
+        cards.append(card.model_copy(update={"id": f"C{len(cards) + 1}"}))
+        used_hypotheses.update(item.id for item in matches)
+    return cards
+
+
+def _triangle_construct(hypothesis: SoulLiteHypothesis) -> ConstructCard | None:
+    text = _card_source_text(hypothesis)
+    if not _contains_any(text, ("鐵三角", "時程", "範疇", "預算", "triangle", "budget", "scope", "schedule")):
+        return None
+    return _construct_from_hypothesis(
+        hypothesis,
+        title="Constraint triangle integrity",
+        decision_rule=(
+            "When constraints are mutually inconsistent, protect delivery realism by making the "
+            "tradeoff explicit and renegotiating one side of the triangle."
+        ),
+        trigger_context="A plan asks for fixed outcome, fixed resources, and fixed timing at once.",
+        protected_value="delivery realism",
+        traded_value="short-term harmony",
+        default_action="surface the constraint conflict and ask which condition can move",
+        refused_action="pretend all constraints can stay unchanged",
+        exception_rule=None,
+        falsifier="Accepts an impossible plan to preserve harmony without naming the tradeoff.",
+        blind_test_probe=(
+            "A family event has a fixed date, limited helpers, and a larger guest list than the "
+            "space can handle. Write how you would reset the plan."
+        ),
+        dimension_tags=[Dimension.SKILL, Dimension.BOUNDARIES, Dimension.SOUL],
+        missing_evidence=["exception", "counterexample"],
+        feedback_routes=["exception", "counterexample", "decision_tradeoff", "pressure"],
+        stability_scope="project-like coordination under visible constraints",
+        context_dependence="strongest when tradeoffs affect delivery or operational credibility",
+    )
+
+
+def _direct_conflict_construct(hypothesis: SoulLiteHypothesis) -> ConstructCard | None:
+    text = _card_source_text(hypothesis)
+    if not _contains_any(text, ("direct", "truth", "conflict", "invalid", "不合理", "衝突", "失效", "風險")):
+        return None
+    return _construct_from_hypothesis(
+        hypothesis,
+        title="Invalid-condition confrontation",
+        decision_rule=(
+            "When a working condition is invalid, protect truthfulness and delivery by naming "
+            "the problem directly before smoothing the relationship."
+        ),
+        trigger_context="A situation remains socially smoother if the invalid condition is left unnamed.",
+        protected_value="truthful diagnosis",
+        traded_value="immediate social comfort",
+        default_action="state the invalid condition and the operational consequence",
+        refused_action="keep peace by leaving the core problem ambiguous",
+        exception_rule=None,
+        falsifier="Chooses vague reassurance when the condition itself makes success impossible.",
+        blind_test_probe=(
+            "A volunteer team promises a public event but the venue access, staffing, and timing "
+            "cannot work together. Write the first message you would send."
+        ),
+        dimension_tags=[Dimension.SOUL, Dimension.VOICE, Dimension.BOUNDARIES],
+        missing_evidence=["exception", "exact_wording", "counterexample"],
+        feedback_routes=["exception", "exact_wording", "counterexample", "pressure"],
+        stability_scope="high-risk coordination and accountability moments",
+        context_dependence="weaker when directness would expose private information unnecessarily",
+    )
+
+
+def _handoff_construct(hypothesis: SoulLiteHypothesis) -> ConstructCard | None:
+    text = _card_source_text(hypothesis)
+    if not _contains_any(text, ("交接班", "交接", "投入", "handoff", "commitment")):
+        return None
+    return _construct_from_hypothesis(
+        hypothesis,
+        title="Handoff as commitment signal",
+        decision_rule=(
+            "When ownership is transferred, protect operational continuity by treating handoff "
+            "quality as evidence of real commitment."
+        ),
+        trigger_context="Someone claims they are done but the next operator lacks usable context.",
+        protected_value="operational continuity",
+        traded_value="trust based only on stated intent",
+        default_action="inspect the handoff artifact before accepting the commitment signal",
+        refused_action="accept verbal completion without usable transfer details",
+        exception_rule=None,
+        falsifier="Treats a vague handoff as sufficient commitment during a consequential transfer.",
+        blind_test_probe=(
+            "A community kitchen changes shifts before a large meal, but the departing lead leaves "
+            "only a vague note. Decide whether to accept it or intervene."
+        ),
+        dimension_tags=[Dimension.SKILL, Dimension.PEOPLE],
+        missing_evidence=["exception", "pressure", "counterexample"],
+        feedback_routes=["exception", "pressure", "counterexample"],
+        stability_scope="work handoffs and responsibility transfer",
+        context_dependence="strongest when another person must act from the transferred context",
+        exception_archetype="operational_reciprocity",
+    )
+
+
+def _emotional_blackmail_construct(hypothesis: SoulLiteHypothesis) -> ConstructCard | None:
+    text = _card_source_text(hypothesis)
+    if not _contains_any(text, ("情感勒索", "議價", "報價", "blackmail", "pricing", "negotiation", "discount")):
+        return None
+    return _construct_from_hypothesis(
+        hypothesis,
+        title="Emotional-pressure pricing boundary",
+        decision_rule=(
+            "When a negotiation uses relationship pressure, protect fair exchange by separating "
+            "emotional claims from the actual terms."
+        ),
+        trigger_context="A counterpart frames a concession as proof of loyalty, friendship, or care.",
+        protected_value="fair exchange",
+        traded_value="approval from the counterpart",
+        default_action="return the conversation to terms, value, and viable alternatives",
+        refused_action="grant concessions because affection or loyalty was invoked",
+        exception_rule=None,
+        falsifier="Gives a concession mainly to avoid being framed as uncaring or disloyal.",
+        blind_test_probe=(
+            "A relative asks you to absorb extra planning work for a shared trip because family "
+            "should help family. Write how you separate care from the actual arrangement."
+        ),
+        dimension_tags=[Dimension.BOUNDARIES, Dimension.PEOPLE, Dimension.VOICE],
+        missing_evidence=["exception", "exact_wording", "counterexample"],
+        feedback_routes=["exception", "exact_wording", "counterexample", "decision_tradeoff"],
+        stability_scope="negotiations where relational pressure distorts terms",
+        context_dependence="weaker when there is explicit prior reciprocity or care obligation",
+        exception_archetype="relational_credit",
+    )
+
+
+def _attacker_motive_construct(hypothesis: SoulLiteHypothesis) -> ConstructCard | None:
+    text = _card_source_text(hypothesis)
+    if not _contains_any(text, ("陷害", "人性", "目的", "motive", "attacker", "attribution", "undermine")):
+        return None
+    return _construct_from_hypothesis(
+        hypothesis,
+        title="Action over attribution",
+        decision_rule=(
+            "When harm or sabotage is possible, protect agency by acting on observable impact "
+            "instead of over-investing in motive attribution."
+        ),
+        trigger_context="The other person's intent is ambiguous but the effect is already consequential.",
+        protected_value="practical agency",
+        traded_value="certainty about hidden motives",
+        default_action="respond to the observable behavior and impact first",
+        refused_action="delay action until the motive is fully explained",
+        exception_rule=None,
+        falsifier="Spends the main effort proving motive while leaving the practical risk unresolved.",
+        blind_test_probe=(
+            "A neighborhood group keeps missing promised tasks and your plan is affected. Decide "
+            "whether to investigate intent, redesign the dependency, or confront the behavior."
+        ),
+        dimension_tags=[Dimension.SOUL, Dimension.PEOPLE],
+        missing_evidence=["exception", "counterexample", "pressure"],
+        feedback_routes=["exception", "counterexample", "pressure"],
+        stability_scope="ambiguous-conflict cases where motives are hard to verify",
+        context_dependence="weaker when legal, safety, or trust repair requires motive evidence",
+    )
+
+
+def _construct_from_hypothesis(
+    hypothesis: SoulLiteHypothesis,
+    *,
+    title: str,
+    decision_rule: str,
+    trigger_context: str,
+    protected_value: str,
+    traded_value: str | None,
+    default_action: str,
+    refused_action: str | None,
+    exception_rule: str | None,
+    falsifier: str,
+    blind_test_probe: str | None,
+    dimension_tags: list[Dimension],
+    missing_evidence: list[str],
+    feedback_routes: list[str],
+    stability_scope: str | None,
+    context_dependence: str | None,
+    exception_archetype: Literal[
+        "relational_credit",
+        "asymmetric_leverage",
+        "operational_reciprocity",
+    ]
+    | None = None,
+) -> ConstructCard:
+    evidence = hypothesis.evidence
+    return ConstructCard(
+        id="C0",
+        title=title,
+        decision_rule=decision_rule,
+        trigger_context=trigger_context,
+        protected_value=protected_value,
+        traded_value=traded_value,
+        default_action=default_action,
+        refused_action=refused_action,
+        exception_rule=exception_rule,
+        register=None,
+        falsifier=falsifier,
+        supporting_evidence=evidence,
+        disconfirming_evidence=[],
+        source_anchor_ids=_source_anchor_ids(evidence),
+        source_turn_ids=_source_turn_ids(evidence),
+        source_question_ids=_source_question_ids(evidence),
+        dimension_tags=dimension_tags,
+        confidence_level="draft",
+        confidence_reason="rule-based construct with supporting evidence but no human review",
+        confidence_checks={},
+        missing_evidence=missing_evidence,
+        blind_test_probe=blind_test_probe,
+        feedback_routes=feedback_routes,
+        extraction_method="rule_based",
+        policy_status=_policy_status(evidence),
+        stability_scope=stability_scope,
+        context_dependence=context_dependence,
+        exception_archetype=exception_archetype,
+    )
+
+
+def _finalize_construct_card(card: ConstructCard) -> ConstructCard:
+    support_count = len(card.supporting_evidence)
+    has_falsifier = bool(card.falsifier.strip())
+    has_exception_audit = card.exception_rule is not None or "exception" not in card.missing_evidence
+    raw_wrapper_risk = _max_raw_wrapper_overlap(card) > 0.45
+    confidence_level: Literal["insufficient", "draft", "plausible", "validated"] = "draft"
+    reasons = ["rule-based v0.1 synthesis"]
+    if support_count <= 1:
+        reasons.append("single-anchor support caps confidence at draft")
+    if not has_falsifier:
+        confidence_level = "insufficient"
+        reasons.append("missing falsifier")
+    if not has_exception_audit:
+        reasons.append("missing exception or counterexample audit")
+    if raw_wrapper_risk:
+        confidence_level = "insufficient"
+        reasons.append("lexical raw-wrapper risk")
+    return card.model_copy(
+        update={
+            "confidence_level": confidence_level,
+            "confidence_reason": "; ".join(reasons),
+            "confidence_checks": {
+                "has_supporting_evidence": bool(card.supporting_evidence),
+                "multi_anchor_support": support_count > 1,
+                "has_falsifier": has_falsifier,
+                "has_exception_or_counterexample_audit": has_exception_audit,
+                "raw_wrapper_safe": not raw_wrapper_risk,
+                "human_reviewed": False,
+            },
+        }
+    )
+
+
+def _build_mini_blind_test(
+    construct_cards: list[ConstructCard],
+    hypotheses: list[SoulLiteHypothesis],
+) -> list[MiniBlindTestItem]:
     items: list[MiniBlindTestItem] = []
+    for index, card in enumerate(construct_cards[:5], 1):
+        items.append(
+            MiniBlindTestItem(
+                id=f"T{index}",
+                dimension=card.dimension_tags[0],
+                scenario=card.blind_test_probe
+                or f"Create a new-domain pressure case for `{card.decision_rule}`.",
+                what_to_compare="Which answer preserves the same decision mechanism under a changed domain?",
+                evidence_hint=f"Based on {card.id}: {card.title}",
+            )
+        )
+    if items:
+        return items
     for index, hypothesis in enumerate(hypotheses[:5], 1):
         items.append(
             MiniBlindTestItem(
@@ -406,19 +898,24 @@ def _build_mini_blind_test(hypotheses: list[SoulLiteHypothesis]) -> list[MiniBli
                 dimension=hypothesis.dimension,
                 scenario=_scenario_for(hypothesis),
                 what_to_compare=_compare_prompt_for(hypothesis),
-                evidence_hint=f"Based on {hypothesis.id}: {hypothesis.hypothesis}",
+                evidence_hint=f"Fallback from {hypothesis.id}: {hypothesis.hypothesis}",
             )
         )
     return items
 
 
-def _build_feedback_routes(hypotheses: list[SoulLiteHypothesis]) -> list[str]:
+def _build_feedback_routes(
+    construct_cards: list[ConstructCard],
+    hypotheses: list[SoulLiteHypothesis],
+) -> list[str]:
     routes = [
         "If wording feels wrong, route to VOICE and collect exact words the user would send.",
         "If a value feels wrong, route to SOUL and collect a counterexample plus the tradeoff that changed the decision.",
         "If a refusal feels wrong, route to BOUNDARIES and collect the exception rule, not just the refusal.",
         "If the answer is plausible but generic, route to the strongest related dimension and ask for a pressure case.",
     ]
+    for category in sorted({route for card in construct_cards for route in card.feedback_routes}):
+        routes.append(f"Construct-card missing evidence route: {category}.")
     weak_dimensions = sorted({item.dimension.value for item in hypotheses if item.needs_verification})
     if weak_dimensions:
         routes.append(f"Needs verification in: {', '.join(weak_dimensions)}.")
@@ -610,6 +1107,80 @@ def _dimension_for_triple(triple: PersonaTriple) -> Dimension:
     if any(word in text for word in ("relationship", "trust", "people", "信任", "關係")):
         return Dimension.PEOPLE
     return Dimension.SOUL
+
+
+def _card_source_text(hypothesis: SoulLiteHypothesis) -> str:
+    evidence_text = " ".join(evidence.content for evidence in hypothesis.evidence)
+    return f"{hypothesis.hypothesis} {evidence_text}"
+
+
+def _source_anchor_ids(evidence_items: list[EvidenceItem]) -> list[int]:
+    return sorted({anchor_id for evidence in evidence_items for anchor_id in evidence.source_anchor_ids})
+
+
+def _source_turn_ids(evidence_items: list[EvidenceItem]) -> list[int]:
+    return sorted({turn_id for evidence in evidence_items for turn_id in evidence.source_turn_ids})
+
+
+def _source_question_ids(evidence_items: list[EvidenceItem]) -> list[str]:
+    return sorted({question_id for evidence in evidence_items for question_id in evidence.source_question_ids})
+
+
+def _policy_status(
+    evidence_items: list[EvidenceItem],
+) -> Literal["espoused_only", "behavior_supported", "contradicted", "validated"]:
+    if any(evidence.layer == Layer.FACT for evidence in evidence_items):
+        return "behavior_supported"
+    return "espoused_only"
+
+
+def _max_raw_wrapper_overlap(card: ConstructCard) -> float:
+    if not card.supporting_evidence:
+        return 0.0
+    return max(
+        _lexical_ngram_overlap(card.decision_rule, evidence.content)
+        for evidence in card.supporting_evidence
+    )
+
+
+def _lexical_ngram_overlap(candidate: str, source: str) -> float:
+    candidate_ngrams = _content_ngrams(candidate)
+    if not candidate_ngrams:
+        return 0.0
+    source_ngrams = _content_ngrams(source)
+    return len(candidate_ngrams & source_ngrams) / len(candidate_ngrams)
+
+
+def _content_ngrams(text: str) -> set[str]:
+    tokens = [
+        token
+        for token in _tokenize_for_overlap(text)
+        if token not in _STOP_WORDS and len(token) > 1
+    ]
+    ngrams = set(tokens)
+    ngrams.update(" ".join(tokens[index : index + 2]) for index in range(len(tokens) - 1))
+    return ngrams
+
+
+def _tokenize_for_overlap(text: str) -> list[str]:
+    normalized = text.lower()
+    tokens: list[str] = []
+    current: list[str] = []
+    for char in normalized:
+        if char.isalnum() or "\u4e00" <= char <= "\u9fff":
+            current.append(char)
+        elif current:
+            tokens.append("".join(current))
+            current = []
+    if current:
+        tokens.append("".join(current))
+    return tokens
+
+
+def _card_route(routes: set[str], category: str) -> str:
+    if category in routes:
+        return f"Collect {category.replace('_', ' ')} evidence."
+    return "not primary route"
 
 
 def _has_decision_signal(text: str) -> bool:
