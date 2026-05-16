@@ -1,0 +1,162 @@
+version: 2
+status: draft
+production_enabled: false
+
+packs:
+  engineer_ai_builder:
+    name: "Engineer / AI Builder"
+    domain_role:
+      - "AI 工程師"
+      - "AI Builder"
+      - "LLM 應用開發者"
+      - "MLOps 工程師"
+      - "全端 AI 開發者"
+    core_task:
+      - "設計 AI 系統架構"
+      - "開發與部署 LLM 應用"
+      - "診斷 production issue"
+      - "評估技術選型與 trade-off"
+      - "設計 PoC 與實驗驗證"
+    primary_counterparty:
+      - "產品經理"
+      - "資料科學家"
+      - "SRE / DevOps"
+      - "業務團隊"
+      - "終端用戶或客戶"
+    decision_partner:
+      - "Tech Lead"
+      - "CTO"
+      - "架構審查夥伴"
+      - "跨職能技術夥伴"
+
+    skill_questions:
+      - id: engineer_skill_01
+        text: "請描述你最近一次 production model 或 AI 功能表現退化時，你一步步如何診斷並解決？"
+        purpose: "萃取系統性 debug 與 root-cause 分析能力。"
+        expected_anchor: pattern
+        follow_up_max: 2
+        stop_condition: "已描述監控、判斷、修復與最終選擇理由。"
+        risk_level: low
+        anchor_signal: "系統思考深度、風險意識、production reliability 優先順序。"
+      - id: engineer_skill_02
+        text: "當 PM 或需求方提出模糊但野心很大的 AI feature 時，你如何把它轉成可執行的技術任務？"
+        purpose: "萃取需求澄清與技術翻譯能力。"
+        expected_anchor: pattern
+        follow_up_max: 2
+        stop_condition: "已描述澄清問題、成功標準與共識建立方式。"
+        risk_level: medium
+        anchor_signal: "務實程度、ambiguity 容忍度、溝通主動性。"
+      - id: engineer_skill_03
+        text: "請描述你最近一次遇到 latency、成本或記憶體瓶頸時，如何診斷與取捨。"
+        purpose: "萃取效能優化與 trade-off 判斷能力。"
+        expected_anchor: pattern
+        follow_up_max: 2
+        stop_condition: "已描述 bottleneck、候選方案與取捨理由。"
+        risk_level: low
+        anchor_signal: "實務導向、耐心、成本與品質平衡。"
+      - id: engineer_skill_04
+        text: "當你要引入新 AI framework、library 或 agent 工具時，你通常怎麼評估？"
+        purpose: "萃取新技術採用風險評估風格。"
+        expected_anchor: principle
+        follow_up_max: 2
+        stop_condition: "已描述小實驗、benchmark、migration cost 或團隊學習成本。"
+        risk_level: medium
+        anchor_signal: "謹慎程度、實驗驗證偏好、長期維護思維。"
+      - id: engineer_skill_05
+        text: "請分享一次你處理 legacy AI code、舊 pipeline 或別人留下的系統時，怎麼決定先改哪裡。"
+        purpose: "萃取 code ownership 與 refactoring 哲學。"
+        expected_anchor: principle
+        follow_up_max: 2
+        stop_condition: "已說明優先順序與風險控制方式。"
+        risk_level: medium
+        anchor_signal: "團隊協作態度、責任感與務實平衡。"
+      - id: engineer_skill_06
+        text: "如果上線後出現 crash、錯誤回答或嚴重告警，你第一時間會做什麼？"
+        purpose: "萃取危機處理與優先排序能力。"
+        expected_anchor: pattern
+        follow_up_max: 2
+        stop_condition: "已描述止血、查證、復原與事後追查順序。"
+        risk_level: low
+        anchor_signal: "冷靜程度、壓力下決策品質、可靠性偏好。"
+      - id: engineer_skill_07
+        text: "你怎麼跟非技術的人解釋複雜模型行為、AI 限制或做不到的原因？"
+        purpose: "萃取技術溝通與簡化能力。"
+        expected_anchor: pattern
+        follow_up_max: 2
+        stop_condition: "已給出具體說法、比喻或溝通案例。"
+        risk_level: low
+        anchor_signal: "同理心、轉譯能力、影響力。"
+      - id: engineer_skill_08
+        text: "當實驗結果不如預期時，你怎麼決定繼續迭代、縮小範圍，還是 pivot？"
+        purpose: "萃取實驗設計與決斷力。"
+        expected_anchor: principle
+        follow_up_max: 2
+        stop_condition: "已描述 success metric、failure mode 與決策理由。"
+        risk_level: low
+        anchor_signal: "數據導向、學習心態、避免 sunk-cost fallacy。"
+
+    people_questions:
+      - id: engineer_people_01
+        text: "請分享一次你與資料科學家、研究員或工程夥伴對模型選擇有不同意見時，你如何建立信任並達成共識？"
+      - id: engineer_people_02
+        text: "當跨團隊交付的 pipeline 或 API 品質影響你的工作時，你通常怎麼處理衝突？"
+      - id: engineer_people_03
+        text: "請描述你如何影響 Tech Lead 或技術夥伴採納你的技術提案。"
+      - id: engineer_people_04
+        text: "在與 PM 或業務合作時，你如何設定邊界，避免 scope creep？"
+      - id: engineer_people_05
+        text: "當 code review 或架構討論中有人強烈反對你的方案時，你會怎麼回應？"
+
+    voice_roleplays:
+      - id: engineer_voice_01
+        type: formal_update
+        text: "請寫一則給 PM 或 stakeholder 的訊息，說明你已完成 AI feature deployment，並附上觀測方式。"
+      - id: engineer_voice_02
+        type: refusal
+        text: "PM 要求你在 deadline 前加入未測試的新功能，你會怎麼用訊息拒絕或延後？"
+      - id: engineer_voice_03
+        type: push
+        text: "請寫一段 Slack 訊息，推動團隊採用你建議的 monitoring 或 evaluation 方法。"
+      - id: engineer_voice_04
+        type: conflict
+        text: "如果 DevOps / SRE 拒絕你的 deployment request，你會怎麼回覆？"
+      - id: engineer_voice_05
+        type: repair
+        text: "AI bug 造成業務或使用者損失後，你會怎麼在 group chat 安撫並修復信任？"
+
+    boundaries_questions:
+      - id: engineer_boundaries_01
+        text: "在 AI 專案中，你覺得哪些決定可以自己拍板，哪些一定要找人 review？"
+      - id: engineer_boundaries_02
+        text: "什麼樣的 production change 會讓你堅持不能直接上線？"
+      - id: engineer_boundaries_03
+        text: "你不可接受的 code quality、security 或 observability practice 是哪些？"
+      - id: engineer_boundaries_04
+        text: "當別人期待你一人包辦 model、infra、frontend、PM 溝通時，你怎麼劃分責任邊界？"
+      - id: engineer_boundaries_05
+        text: "在 on-call 或緊急狀況下，你會拒絕哪些臨時需求？"
+
+    bad_questions:
+      - bad: "你技術能力如何？"
+        better: "請分享最近一次成功解決的 production issue 細節。"
+      - bad: "你是不是很會 debug？"
+        better: "請描述一次你診斷模型或 AI 功能異常的實際步驟。"
+      - bad: "你團隊合作能力強嗎？"
+        better: "請舉例你與 PM 或工程夥伴意見不同時的處理過程。"
+      - bad: "你有沒有領導過專案？"
+        better: "請分享你如何影響技術決策的具體案例。"
+      - bad: "你對新技術接受度高不高？"
+        better: "請描述你最近一次引入新工具或框架的評估過程。"
+
+    persona_anchor_examples:
+      - "偏好先跑小規模 PoC 驗證，再決定是否全面採用新框架。"
+      - "遇到 production issue 時，優先止血與恢復穩定，再追 root cause。"
+      - "習慣用 metric、evaluation 或 A/B testing 說服需求方，而非只靠主觀判斷。"
+      - "處理 legacy code 時，傾向先用測試或觀測包住風險，再逐步重構。"
+      - "寧可花時間 profiling，也不直接猜測效能瓶頸。"
+      - "會主動把複雜技術限制轉譯成業務影響與風險語言。"
+      - "拒絕在沒有 monitoring 或 rollback plan 的情況下直接上線新模型。"
+      - "傾向把 technical debt 明確排入後續工作，而不是無限默默承擔。"
+      - "遇到模糊需求時，會先定義 success criteria 再開始實作。"
+      - "把 experiment failure 視為團隊知識，會整理 failure mode 而非只宣布失敗。"
+

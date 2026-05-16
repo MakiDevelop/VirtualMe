@@ -163,7 +163,23 @@ When the user shows fatigue:
 
 1. Add `question-pool-v2.yaml` as draft data only.
 2. Add intake command/state for domain calibration.
-3. Add a loader that accepts v2 metadata while keeping old `Question` usable.
-4. Add tests for placeholder-free text, risk metadata, and anchor target fields.
-5. Add selector v2 behind a feature flag.
-6. Dogfood v2 with one interviewee before replacing production default.
+3. Add `domain-packs-v2.yaml` as optional domain-specific overlays.
+4. Add a loader that accepts v2 metadata while keeping old `Question` usable.
+5. Add tests for placeholder-free text, risk metadata, and anchor target fields.
+6. Add selector v2 behind a feature flag.
+7. Dogfood v2 with one interviewee before replacing production default.
+
+## Domain Packs
+
+Domain packs should not replace the eight-dimension persona backbone. They only
+specialize the dimensions where professional context matters most:
+
+- SKILL
+- PEOPLE
+- VOICE
+- BOUNDARIES
+
+The first draft pack is `engineer_ai_builder` in
+`src/virtualme/data/domain-packs-v2.yaml`. Remaining packs should be added only
+when Scout output includes complete questions, roleplay scenarios, bad-question
+alternatives, and persona anchor examples.
