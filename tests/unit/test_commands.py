@@ -135,11 +135,12 @@ async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_pat
         }
     )
 
-    reply = await process_turn("u1", "重頭開始萃取", object(), db, selector, settings)
+    reply = await process_turn("u1", "重頭開始萃取", _Claude(), db, selector, settings)
 
     assert "從頭開始萃取" in reply
     assert "舊資料已封存" in reply
-    assert "How has work been?" in reply
+    assert "繁中第一題" in reply
+    assert "How has work been?" not in reply
     assert await db.load_anchors_summary("u1") == {dimension: [] for dimension in Dimension}
     assert await db.load_triples("u1") == []
     assert (tmp_path / "personas" / "u1" / "VOICE.md").is_file()
@@ -158,6 +159,21 @@ async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_pat
     assert sessions[-1][1] == 1
     assert sessions[-1][2] == "active"
     assert sessions[-1][3] == "Q1"
+
+
+async def test_process_turn_light_greeting_starts_first_question(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(anthropic_api_key=SecretStr("k"))
+
+    reply = await process_turn("u1", "哈囉", _Claude(), db, selector, settings)
+
+    assert reply == "繁中第一題"
+    assert await db.get_current_question_id(1) == "Q1"
+    turns = await db.load_session_turns(1)
+    assert [turn.role for turn in turns] == ["user", "assistant"]
 
 
 async def test_process_turn_retalk_pins_dimension_question(tmp_path):
@@ -198,7 +214,7 @@ class _Messages:
         elif max_tokens in (500, 900):
             text = "[]"
         else:
-            text = "OK"
+            text = "繁中第一題"
         return type("Response", (), {"content": [_Content(text)]})
 
 

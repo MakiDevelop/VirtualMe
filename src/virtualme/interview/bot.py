@@ -95,9 +95,27 @@ async def process_turn(
         # Meta-commands (status query / re-talk) are handled and replied to
         # without running depth/anchor extraction on the message.
         return await _handle_command(
-            command, interviewee_id, incoming_message, session, db, selector, settings
+            command,
+            interviewee_id,
+            incoming_message,
+            session,
+            active_client,
+            db,
+            selector,
+            settings,
         )
     turn_count = await db.count_turns(session.id)
+    if turn_count == 0 and _is_light_greeting(incoming_message):
+        scrub_result = scrub_pii(incoming_message)
+        user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+        await db.save_redactions(user_turn.id, scrub_result.redactions)
+        first_question = _default_question(selector, session.week)
+        await db.set_current_question_id(session.id, first_question.id)
+        await db.record_question_asked(interviewee_id, first_question.id, session.week)
+        reply = await _final_reply(interviewee_id, first_question, active_client, db)
+        await db.save_turn(session.id, "assistant", reply)
+        return reply
+
     scrub_result = scrub_pii(incoming_message)
     if scrub_result.redactions:
         logger.info(
@@ -341,6 +359,24 @@ def _asks_for_traditional_chinese(text: str) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def _is_light_greeting(text: str) -> bool:
+    stripped = text.strip().lower()
+    greetings = {
+        "hi",
+        "hello",
+        "hey",
+        "哈囉",
+        "哈啰",
+        "嗨",
+        "你好",
+        "您好",
+        "早安",
+        "午安",
+        "晚安",
+    }
+    return stripped in greetings
+
+
 async def _auto_export_if_sufficient(
     db: DB,
     interviewee_id: str,
@@ -373,6 +409,7 @@ async def _handle_command(
     interviewee_id: str,
     incoming_message: str,
     session: Session,
+    active_client: AsyncAnthropic,
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
@@ -382,7 +419,9 @@ async def _handle_command(
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
         await db.save_redactions(user_turn.id, scrub_result.redactions)
-        reply, new_session = await _handle_restart(interviewee_id, db, selector, settings)
+        reply, new_session = await _handle_restart(
+            interviewee_id, active_client, db, selector, settings
+        )
         await db.save_turn(new_session.id, "assistant", reply)
         return reply
 
@@ -409,6 +448,7 @@ async def _handle_command(
 
 async def _handle_restart(
     interviewee_id: str,
+    active_client: AsyncAnthropic,
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
@@ -426,7 +466,8 @@ async def _handle_restart(
     first_question = _default_question(selector, 1)
     await db.set_current_question_id(new_session.id, first_question.id)
     await db.record_question_asked(interviewee_id, first_question.id, 1)
-    return format_restart_reply(archive_note, archived_counts, first_question.text), new_session
+    rendered_question = await _final_reply(interviewee_id, first_question, active_client, db)
+    return format_restart_reply(archive_note, archived_counts, rendered_question), new_session
 
 
 async def _handle_retalk(
