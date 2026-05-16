@@ -21,7 +21,13 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from anthropic import AsyncAnthropic, AuthenticationError, PermissionDeniedError
+from anthropic import (
+    AsyncAnthropic,
+    AuthenticationError,
+    BadRequestError,
+    PermissionDeniedError,
+    UnprocessableEntityError,
+)
 
 from virtualme.interview.models import MODEL_FAST
 
@@ -115,7 +121,12 @@ async def validate_api_key(api_key: str) -> bool:
                 max_tokens=1,
                 messages=[{"role": "user", "content": "ping"}],
             )
-        except (AuthenticationError, PermissionDeniedError):
+        except (
+            AuthenticationError,
+            PermissionDeniedError,
+            BadRequestError,
+            UnprocessableEntityError,
+        ):
             return False
     return True
 

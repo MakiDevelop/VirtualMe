@@ -52,15 +52,15 @@ async def process_turn(
     override_week: int | None = None,
 ) -> str:
     settings = settings or Settings()
+    active_client = claude
     if settings.byok_enabled:
         # BYOK gate runs before session/scrub/save_turn/any LLM call.
         gate = await byok.run_byok_gate(interviewee_id, incoming_message, settings.byok_keys_dir)
         if gate.reply is not None:
             return gate.reply
-        # Interview LLM calls run on the interviewee's own key. The operator
-        # `claude` argument is intentionally shadowed and unused below.
+        # Interview LLM calls run on the interviewee's own key.
         assert gate.api_key is not None
-        claude = byok.build_client(gate.api_key)
+        active_client = byok.build_client(gate.api_key)
     max_week = (
         settings.max_extraction_rounds
         if settings.adaptive_extraction
@@ -93,14 +93,14 @@ async def process_turn(
     anchors_by_dimension = await db.load_anchors_summary(interviewee_id)
     asked_question_ids = await db.load_asked_question_ids(interviewee_id)
     current_question = await _resolve_current_question(db, selector, session.id, session.week)
-    depth = await evaluate_depth(scrub_result.scrubbed_text, current_question.text, claude)
+    depth = await evaluate_depth(scrub_result.scrubbed_text, current_question.text, active_client)
     await db.record_question_answered(interviewee_id, current_question.id, session.week, depth.value)
     all_anchors = [anchor for anchors in anchors_by_dimension.values() for anchor in anchors]
     rule = select_rule(scrub_result.scrubbed_text, depth, all_anchors)
 
     # Mine anchors from every answer: the follow-up decision below only changes
     # what the bot asks next, not whether this turn is extracted.
-    extracted_anchors = await extract_anchors(user_turn, current_question, claude)
+    extracted_anchors = await extract_anchors(user_turn, current_question, active_client)
     for anchor in extracted_anchors:
         await db.save_anchor(
             interviewee_id,
@@ -112,7 +112,9 @@ async def process_turn(
         )
 
     if rule and depth != Layer.PRINCIPLE:
-        reply = await generate_follow_up(rule, scrub_result.scrubbed_text, current_question.text, claude)
+        reply = await generate_follow_up(
+            rule, scrub_result.scrubbed_text, current_question.text, active_client
+        )
     else:
         next_question = selector.select_next(
             session,
@@ -134,9 +136,11 @@ async def process_turn(
             if should_reinject(turn_count, settings.reinjection_interval):
                 anchor = build_reinjection_anchor(interviewee_id, triples[:5])
                 dialogue_context = f"{anchor}\n\n{dialogue_context}" if anchor else dialogue_context
-            reply = await ppa_response(dialogue_context, triples, claude, settings)
+            reply = await ppa_response(dialogue_context, triples, active_client, settings)
         else:
-            reply = await _final_reply(interviewee_id, next_question or DEFAULT_QUESTION, claude, db)
+            reply = await _final_reply(
+                interviewee_id, next_question or DEFAULT_QUESTION, active_client, db
+            )
 
     await db.save_turn(session.id, "assistant", reply)
     turns_so_far = await db.load_session_turns(session.id)
@@ -145,7 +149,7 @@ async def process_turn(
         interviewee_id=interviewee_id,
         user_text=incoming_message,
         turns=turns_so_far,
-        claude=claude,
+        claude=active_client,
         db=db,
     )
     if extracted:

@@ -37,11 +37,23 @@ async def auto_export_persona(db: DB, interviewee_id: str, export_dir: str) -> l
     failure is logged, never raised, so an odd git environment cannot break
     the interview reply.
     """
+    _validate_interviewee_id(interviewee_id)
     base = Path(export_dir)
     base.mkdir(parents=True, exist_ok=True)
     written = await export_markdown(db, interviewee_id, base)
     await _commit_archive(base, interviewee_id)
     return written
+
+
+def _validate_interviewee_id(interviewee_id: str) -> None:
+    if (
+        not interviewee_id
+        or ".." in interviewee_id
+        or "/" in interviewee_id
+        or "\\" in interviewee_id
+        or any(ord(char) < 32 for char in interviewee_id)
+    ):
+        raise ValueError("Invalid interviewee_id for persona export")
 
 
 async def _run_git(repo: Path, *args: str) -> tuple[int, str]:
@@ -65,6 +77,13 @@ async def _commit_archive(base: Path, interviewee_id: str) -> None:
             if code != 0:
                 logger.error("Persona repo git init failed: %s", out)
                 return
+        code, out = await _run_git(base, "remote")
+        if code != 0:
+            logger.error("Persona repo remote check failed: %s", out)
+            return
+        if out.strip():
+            logger.error("Persona repo has remote configured; skipping local archive commit")
+            return
         await _run_git(base, "add", "--", interviewee_id)
         # git diff --cached --quiet: exit 0 = nothing staged, 1 = staged changes.
         code, _ = await _run_git(base, "diff", "--cached", "--quiet")

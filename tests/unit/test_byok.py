@@ -4,6 +4,7 @@ import logging
 import stat
 
 import aiosqlite
+import httpx
 from pydantic import SecretStr
 
 from virtualme.config import Settings
@@ -130,6 +131,44 @@ async def test_gate_never_logs_the_key(tmp_path, monkeypatch, caplog):
     with caplog.at_level(logging.DEBUG):
         await byok.run_byok_gate("u1", secret, str(keys_dir))
     assert secret not in caplog.text
+
+
+async def test_validate_api_key_treats_malformed_4xx_as_invalid(monkeypatch):
+    class BadClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        class messages:
+            @staticmethod
+            async def create(**_kwargs):
+                response = httpx.Response(400, request=httpx.Request("POST", "https://api.test"))
+                raise byok.BadRequestError("bad request", response=response, body={})
+
+    monkeypatch.setattr(byok, "build_client", lambda _key: BadClient())
+
+    assert await byok.validate_api_key("sk-ant-malformed") is False
+
+
+async def test_validate_api_key_treats_unprocessable_4xx_as_invalid(monkeypatch):
+    class BadClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        class messages:
+            @staticmethod
+            async def create(**_kwargs):
+                response = httpx.Response(422, request=httpx.Request("POST", "https://api.test"))
+                raise byok.UnprocessableEntityError("bad key", response=response, body={})
+
+    monkeypatch.setattr(byok, "build_client", lambda _key: BadClient())
+
+    assert await byok.validate_api_key("sk-ant-malformed") is False
 
 
 # --- process_turn integration ------------------------------------------------

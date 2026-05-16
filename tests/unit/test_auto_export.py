@@ -101,6 +101,50 @@ async def test_auto_export_versions_each_export_as_a_commit(tmp_path):
     assert _commit_count(export_dir) == 2
 
 
+async def test_auto_export_rejects_path_traversal_interviewee_id(tmp_path):
+    db = await _new_db(tmp_path)
+
+    for bad_id in ["../x", "nested/x", "nested\\x", "bad\nid", "bad..id"]:
+        try:
+            await auto_export_persona(db, bad_id, str(tmp_path / "personas"))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted unsafe interviewee_id: {bad_id!r}")
+
+
+async def test_auto_export_skips_commit_when_repo_has_remote(tmp_path, caplog):
+    db = await _new_db(tmp_path)
+    await db.save_anchor("u1", Dimension.VOICE, Layer.PATTERN, "x", [1], ["Q1"])
+    export_dir = tmp_path / "personas"
+    export_dir.mkdir()
+    await auto_export_persona(db, "u1", str(export_dir))
+    code, out = await _run_git_for_test(export_dir, "remote", "add", "origin", "https://example.com/repo.git")
+    assert code == 0, out
+    await db.save_anchor("u1", Dimension.BOUNDARIES, Layer.PRINCIPLE, "y", [2], ["Q2"])
+
+    with caplog.at_level("ERROR"):
+        await auto_export_persona(db, "u1", str(export_dir))
+
+    assert _commit_count(export_dir) == 1
+    assert "has remote configured" in caplog.text
+
+
+async def _run_git_for_test(repo: Path, *args: str) -> tuple[int, str]:
+    import asyncio
+
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(repo),
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    stdout, _ = await proc.communicate()
+    return proc.returncode or 0, stdout.decode("utf-8", errors="replace").strip()
+
+
 # --- process_turn integration ------------------------------------------------
 
 
