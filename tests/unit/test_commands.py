@@ -178,6 +178,20 @@ async def test_process_turn_light_greeting_starts_first_question(tmp_path):
     assert [turn.role for turn in turns] == ["user", "assistant"]
 
 
+async def test_process_turn_greeting_with_trailing_punctuation_resumes(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(anthropic_api_key=SecretStr("k"))
+
+    reply = await process_turn("u1", "哈囉" + "\uff5e", _Claude(), db, selector, settings)
+
+    assert "才剛開始" in reply
+    assert "近況" in reply
+    assert "我先記下這點" not in reply
+
+
 async def test_process_turn_light_greeting_resumes_known_progress(tmp_path):
     db = await _new_db(tmp_path)
     selector = QuestionSelector(

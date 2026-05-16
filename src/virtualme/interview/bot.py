@@ -1,4 +1,5 @@
 import logging
+import unicodedata
 
 from anthropic import AsyncAnthropic
 
@@ -359,7 +360,7 @@ def _asks_for_traditional_chinese(text: str) -> bool:
 
 
 def _is_light_greeting(text: str) -> bool:
-    stripped = text.strip().lower()
+    stripped = _strip_trailing_marks(text.strip().lower())
     greetings = {
         "hi",
         "hello",
@@ -374,6 +375,12 @@ def _is_light_greeting(text: str) -> bool:
         "晚安",
     }
     return stripped in greetings
+
+
+def _strip_trailing_marks(text: str) -> str:
+    while text and unicodedata.category(text[-1])[0] in {"P", "S"}:
+        text = text[:-1].rstrip()
+    return text
 
 
 async def _handle_light_greeting(
