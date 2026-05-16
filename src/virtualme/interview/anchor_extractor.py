@@ -2,6 +2,7 @@ import json
 
 from anthropic import AsyncAnthropic
 
+from virtualme.interview.models import MODEL_STANDARD
 from virtualme.storage.db import Anchor, Dimension, Layer, Question, Turn
 
 
@@ -19,7 +20,7 @@ Question: {current_question.text}
 Answer: {turn.content}
 """
     response = await claude.messages.create(
-        model="claude-sonnet-4-5",
+        model=MODEL_STANDARD,
         max_tokens=500,
         temperature=0,
         messages=[{"role": "user", "content": prompt}],

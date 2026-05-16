@@ -6,6 +6,7 @@ from virtualme.config import Settings
 from virtualme.interview.anchor_extractor import extract_anchors
 from virtualme.interview.depth_evaluator import evaluate_depth
 from virtualme.interview.follow_up import generate_follow_up, select_rule
+from virtualme.interview.models import MODEL_DEEP
 from virtualme.interview.pii import scrub_pii
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.interview.session_lifecycle import finalize_session_if_closing
@@ -19,6 +20,11 @@ DEFAULT_QUESTION = Question(
     dimension=Dimension.STATE,
     text="How has your work been this past week?",
     energy_tax="low",
+)
+
+INTERVIEW_ERROR_REPLY = (
+    "抱歉，我這邊剛才出了點狀況，麻煩你再說一次。"  # noqa: RUF001
+    " (Sorry, something went wrong on my side — please try again.)"
 )
 
 
@@ -133,7 +139,7 @@ Accumulated anchors: {anchors}
 Coverage gaps: {gaps}
 """
     response = await claude.messages.create(
-        model="claude-opus-4-7",
+        model=MODEL_DEEP,
         max_tokens=180,
         temperature=0.3,
         system=system,

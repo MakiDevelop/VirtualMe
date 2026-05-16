@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI, HTTPException, Request
 
@@ -9,14 +11,17 @@ from virtualme.transport.line import handle_line_webhook
 
 settings = Settings()
 db = DB(sqlite_path(settings.database_url))
-claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
+claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value(), max_retries=4)
 selector = QuestionSelector(load_question_pool())
-app = FastAPI(title="VirtualMe", version=__version__)
 
 
-@app.on_event("startup")
-async def startup() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     await db.init()
+    yield
+
+
+app = FastAPI(title="VirtualMe", version=__version__, lifespan=lifespan)
 
 
 @app.get("/healthz")

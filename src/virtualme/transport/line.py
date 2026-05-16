@@ -16,7 +16,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from virtualme.config import Settings
-from virtualme.interview.bot import process_turn
+from virtualme.interview.bot import INTERVIEW_ERROR_REPLY, process_turn
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.storage.db import DB
 
@@ -69,14 +69,18 @@ async def handle_line_webhook(
                 logger.warning("LINE text event skipped because user_id is missing")
                 continue
 
-            reply = await process_turn(
-                interviewee_id=interviewee_id,
-                incoming_message=event.message.text,
-                claude=claude,
-                db=db,
-                selector=selector,
-                settings=settings,
-            )
+            try:
+                reply = await process_turn(
+                    interviewee_id=interviewee_id,
+                    incoming_message=event.message.text,
+                    claude=claude,
+                    db=db,
+                    selector=selector,
+                    settings=settings,
+                )
+            except Exception as exc:
+                logger.error("process_turn failed for %s: %s", interviewee_id, exc)
+                reply = INTERVIEW_ERROR_REPLY
             if await _send_reply_or_push(line_bot_api, event.reply_token, interviewee_id, reply):
                 handled += 1
 

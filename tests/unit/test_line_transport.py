@@ -115,6 +115,48 @@ async def test_valid_text_event_calls_process_turn_and_reply(monkeypatch):
     assert sent == [("reply", "reply-token", "reply")]
 
 
+async def test_process_turn_failure_replies_with_fallback(monkeypatch):
+    body = _line_body()
+    sent = []
+
+    async def fake_process_turn(**kwargs):
+        raise RuntimeError("anthropic outage")
+
+    class FakeApiClient:
+        def __init__(self, configuration):
+            self.configuration = configuration
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    class FakeMessagingApi:
+        def __init__(self, api_client):
+            self.api_client = api_client
+
+        async def reply_message(self, request):
+            sent.append(("reply", request.reply_token, request.messages[0].text))
+
+        async def push_message(self, request):
+            sent.append(("push", request.to, request.messages[0].text))
+
+    monkeypatch.setattr(line, "process_turn", fake_process_turn)
+    monkeypatch.setattr(line, "AsyncApiClient", FakeApiClient)
+    monkeypatch.setattr(line, "AsyncMessagingApi", FakeMessagingApi)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        object(),
+        object(),
+        settings=_settings(),
+    )
+    assert result == {"status": "ok", "handled": 1}
+    assert sent == [("reply", "reply-token", line.INTERVIEW_ERROR_REPLY)]
+
+
 async def test_malformed_signature_is_graceful():
     body = _line_body()
     result = await line.handle_line_webhook(

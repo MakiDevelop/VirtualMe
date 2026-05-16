@@ -6,6 +6,7 @@ from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
 from virtualme.interview.lang import tokens
+from virtualme.interview.models import MODEL_FAST, MODEL_STANDARD
 from virtualme.interview.triples import PersonaTriple
 
 
@@ -38,7 +39,7 @@ async def _stage1_general_response(dialogue_context: str, claude: AsyncAnthropic
         'Format: {"assistant": <response>}'
     )
     response = await claude.messages.create(
-        model="claude-haiku-4-5",
+        model=MODEL_FAST,
         max_tokens=150,
         temperature=0.3,
         messages=[{"role": "user", "content": prompt}],
@@ -75,7 +76,7 @@ async def _stage3_refine(
         'Format: {"assistant": <assistant refined response>}'
     )
     response = await claude.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL_STANDARD,
         max_tokens=512,
         temperature=0.3,
         messages=[{"role": "user", "content": prompt}],

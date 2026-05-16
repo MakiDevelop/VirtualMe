@@ -3,6 +3,7 @@ import json
 from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 
+from virtualme.interview.models import MODEL_STANDARD
 from virtualme.storage.db import Turn
 
 
@@ -33,7 +34,7 @@ Transcript:
 {transcript}
 """
     response = await claude.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL_STANDARD,
         max_tokens=900,
         temperature=0,
         messages=[{"role": "user", "content": prompt}],

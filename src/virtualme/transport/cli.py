@@ -4,7 +4,7 @@ import asyncio
 from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings, sqlite_path
-from virtualme.interview.bot import process_turn
+from virtualme.interview.bot import INTERVIEW_ERROR_REPLY, process_turn
 from virtualme.interview.question_selector import QuestionSelector, load_question_pool
 from virtualme.storage.db import DB
 
@@ -21,7 +21,7 @@ async def main() -> None:
 
     settings = Settings()
     db = DB(sqlite_path(settings.database_url))
-    claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value(), max_retries=4)
     selector = _selector()
     interviewee_id = args.interviewee
     print("VirtualMe CLI. Ctrl-D to exit.")
@@ -32,15 +32,19 @@ async def main() -> None:
             break
         if not incoming:
             continue
-        reply = await process_turn(
-            interviewee_id,
-            incoming,
-            claude,
-            db,
-            selector,
-            settings,
-            override_week=args.week,
-        )
+        try:
+            reply = await process_turn(
+                interviewee_id,
+                incoming,
+                claude,
+                db,
+                selector,
+                settings,
+                override_week=args.week,
+            )
+        except Exception:
+            print(INTERVIEW_ERROR_REPLY)
+            continue
         print(reply)
 
 

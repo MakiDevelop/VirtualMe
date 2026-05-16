@@ -3,6 +3,7 @@ from enum import StrEnum
 from anthropic import AsyncAnthropic
 
 from virtualme.interview.lang import length_units, tokens
+from virtualme.interview.models import MODEL_STANDARD
 from virtualme.storage.db import Anchor, Layer
 
 
@@ -63,7 +64,7 @@ Answer: {answer}
 Keep their wording. Do not advise, praise, or explain.
 """
     response = await claude.messages.create(
-        model="claude-sonnet-4-5",
+        model=MODEL_STANDARD,
         max_tokens=80,
         temperature=0.2,
         messages=[{"role": "user", "content": prompt}],
