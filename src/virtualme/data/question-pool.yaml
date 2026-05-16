@@ -1,0 +1,436 @@
+# VirtualMe Question Pool — Profession-Agnostic Template
+#
+# This file ships with the agnostic SKILL questions. Operators fork this
+# file and substitute {domain_object} / {domain_role} / {core_task} /
+# {primary_counterparty} / {decision_partner} / {counterparty} for the
+# interviewee's profession.
+#
+# Three example substitutions are documented in specs/02-question-pool.md.
+#
+# Energy tax legend:
+#   low  = fact recall, low cognitive load
+#   mid  = pattern surfacing, medium load
+#   high = principle / dilemma / counterexample, high load
+#
+# The Question Selection algorithm avoids stacking multiple "high" tax
+# questions in a single session.
+
+version: 1
+
+questions:
+  # ─── Week 1 — HISTORY ──────────────────────────────────────────────
+  - id: H1
+    week: 1
+    dimension: HISTORY
+    text: "Why did you enter this profession? What was the original spark?"
+    rationale_probe: "If that spark hadn't happened, where would you be now?"
+    energy_tax: low
+
+  - id: H2
+    week: 1
+    dimension: HISTORY
+    text: "First moment in your career when you thought, 'I'm doing this right.' What was that?"
+    rationale_probe: "What was your criterion for 'doing it right' at that moment?"
+    energy_tax: mid
+
+  - id: H3
+    week: 1
+    dimension: HISTORY
+    text: "First moment when you thought, 'I shouldn't continue down this path.' How did you decide what to do?"
+    rationale_probe: "At that moment, what tipped you toward staying or leaving?"
+    energy_tax: high
+
+  - id: H4
+    week: 1
+    dimension: HISTORY
+    text: "Three people who influenced you most (mentor, client, peer, competitor — anyone). What did each teach you?"
+    rationale_probe: "One sentence any of them said that you still remember today?"
+    energy_tax: mid
+
+  - id: H5
+    week: 1
+    dimension: HISTORY
+    text: "Most regretted professional decision? What did you learn from it?"
+    rationale_probe: "If you could redo it, what judgment criterion would you use?"
+    energy_tax: high
+
+  - id: H6
+    week: 1
+    dimension: HISTORY
+    text: "Most proud project. Why this one, and not one that's more famous or made more money?"
+    rationale_probe: "What does it mean to you?"
+    energy_tax: mid
+
+  - id: H7
+    week: 1
+    dimension: HISTORY
+    text: "Tell me about a time you misjudged — you recommended or decided wrong. What were the signals you had, versus the real signals in hindsight?"
+    rationale_probe: "What changed in your judgment process after that?"
+    energy_tax: high
+
+  - id: H8
+    week: 1
+    dimension: HISTORY
+    text: "Family background, childhood, or education — how did any of them shape you for this work? (Skip if you'd rather not share.)"
+    rationale_probe: "Which element shapes the current you most deeply?"
+    energy_tax: high
+    optional: true
+
+  - id: H9
+    week: 1
+    dimension: HISTORY
+    text: "Your 5-years-ago self looking at you now — what would surprise them most?"
+    rationale_probe: "Did you choose that change actively, or were you pushed?"
+    energy_tax: mid
+
+  - id: H10
+    week: 1
+    dimension: HISTORY
+    text: "If you weren't in this profession, what would you be doing? Why?"
+    rationale_probe: "Is that alternate path still alive in you?"
+    energy_tax: mid
+
+  # ─── Week 2 — SKILL (profession-agnostic templates) ────────────────
+  - id: S1
+    week: 2
+    dimension: SKILL
+    text: "Your personal SOP for {core_task} — not the textbook version. Walk me through it."
+    rationale_probe: "Which step is your biggest divergence from how peers do it?"
+    energy_tax: mid
+    placeholders: [core_task]
+
+  - id: S2
+    week: 2
+    dimension: SKILL
+    text: "Your opening move with {primary_counterparty}. How does it differ from peers?"
+    rationale_probe: "What do you deliberately avoid in the opener? Why?"
+    energy_tax: mid
+    placeholders: [primary_counterparty]
+
+  - id: S3
+    week: 2
+    dimension: SKILL
+    text: "Three questions you always ask {decision_partner} that others don't."
+    rationale_probe: "Beyond those three, what do you read non-verbally?"
+    energy_tax: mid
+    placeholders: [decision_partner]
+
+  - id: S4
+    week: 2
+    dimension: SKILL
+    text: "How do you tell when {counterparty} is genuine versus just going through the motions?"
+    rationale_probe: "Have you ever been fooled? How did you realize?"
+    energy_tax: high
+    placeholders: [counterparty]
+
+  - id: S5
+    week: 2
+    dimension: SKILL
+    text: "Strategy differences across junior / mid / senior levels of {counterparty}."
+    rationale_probe: "Which level is hardest for you? Why?"
+    energy_tax: mid
+    placeholders: [counterparty]
+
+  - id: S6
+    week: 2
+    dimension: SKILL
+    text: "Three industry consensus practices you disagree with."
+    rationale_probe: "Why does everyone still do them? Have you been burned by avoiding them?"
+    energy_tax: high
+
+  - id: S7
+    week: 2
+    dimension: SKILL
+    text: "Five red flags + five green flags from your private checklist."
+    rationale_probe: "Which item is self-taught — not in any textbook?"
+    energy_tax: mid
+
+  - id: S8
+    week: 2
+    dimension: SKILL
+    text: "Three failure cases + the root cause for each."
+    rationale_probe: "Which one made you change your SOP? How?"
+    energy_tax: high
+
+  # ─── Week 3 — PEOPLE ───────────────────────────────────────────────
+  - id: P1
+    week: 3
+    dimension: PEOPLE
+    text: "Three counterparties who most often reach out to you in the past 3 years — one story per person."
+    rationale_probe: "What do they have in common?"
+    energy_tax: mid
+
+  - id: P2
+    week: 3
+    dimension: PEOPLE
+    text: "Three counterparties you maintain (years-long) relationships with — one story each."
+    rationale_probe: "Why do you maintain each of those relationships?"
+    energy_tax: mid
+
+  - id: P3
+    week: 3
+    dimension: PEOPLE
+    text: "The mentor or industry senior who most influenced you. Tell me one story."
+    rationale_probe: "Do you want to become like them?"
+    energy_tax: mid
+
+  - id: P4
+    week: 3
+    dimension: PEOPLE
+    text: "The competitor you most respect. One story."
+    rationale_probe: "What can they do that you can't?"
+    energy_tax: mid
+
+  - id: P5
+    week: 3
+    dimension: PEOPLE
+    text: "Two peers, partners, or reports closest to you. One story each."
+    rationale_probe: "What unspoken understanding do you have with them?"
+    energy_tax: mid
+
+  # ─── Week 4 — VOICE (collection prompts) ───────────────────────────
+  - id: V1
+    week: 4
+    dimension: VOICE
+    text: "Pretend you're sending a first-contact message to a senior {counterparty}. 30 seconds of voice or text — say what you'd actually say."
+    rationale_probe: "What did you deliberately not include?"
+    energy_tax: mid
+    placeholders: [counterparty]
+
+  - id: V2
+    week: 4
+    dimension: VOICE
+    text: "How would you deliver bad news to {primary_counterparty} (the decision didn't go their way)? Show me."
+    rationale_probe: null
+    energy_tax: mid
+    placeholders: [primary_counterparty]
+
+  - id: V3
+    week: 4
+    dimension: VOICE
+    text: "Pushing back on {decision_partner} — budget too small, scope unreasonable. Show me your wording."
+    rationale_probe: null
+    energy_tax: mid
+    placeholders: [decision_partner]
+
+  - id: V4
+    week: 4
+    dimension: VOICE
+    text: "Telling someone 'this isn't right for you.' How do you phrase it?"
+    rationale_probe: null
+    energy_tax: mid
+
+  - id: V5
+    week: 4
+    dimension: VOICE
+    text: "Venting to a peer about a frustrating {counterparty}, LINE DM register."
+    rationale_probe: null
+    energy_tax: low
+    placeholders: [counterparty]
+
+  - id: V6
+    week: 4
+    dimension: VOICE
+    text: "Mentioning work to a friend or family member — the most casual register."
+    rationale_probe: null
+    energy_tax: low
+
+  - id: V7
+    week: 4
+    dimension: VOICE
+    text: "Write a public post (LinkedIn / Twitter register) about an industry trend you have a take on."
+    rationale_probe: null
+    energy_tax: mid
+
+  # ─── Week 5 — SOUL (10 questions + blind test gate) ────────────────
+  - id: SO1
+    week: 5
+    dimension: SOUL
+    text: "Three adjectives you absolutely are, three you absolutely are not."
+    rationale_probe: "The 'not' three — has anyone ever misjudged you on these?"
+    energy_tax: high
+
+  - id: SO2
+    week: 5
+    dimension: SOUL
+    text: "Dilemma: counterparty A's constraint conflicts with counterparty B's expectation. How do you handle it?"
+    rationale_probe: "Whose side do you lean toward? Why?"
+    energy_tax: high
+
+  - id: SO3
+    week: 5
+    dimension: SOUL
+    text: "Dilemma: someone you care about needs an outcome you don't think is right for them. What do you say?"
+    rationale_probe: "How do you judge 'right for them'? Do you tell them everything, or filter?"
+    energy_tax: high
+
+  - id: SO4
+    week: 5
+    dimension: SOUL
+    text: "A decision you made backfired and someone got hurt. Do you carry guilt? Why or why not?"
+    rationale_probe: "Where does your responsibility end?"
+    energy_tax: high
+
+  - id: SO5
+    week: 5
+    dimension: SOUL
+    text: "Your private definition of a good {domain_role} — not the textbook one."
+    rationale_probe: "Say it in one sentence."
+    energy_tax: high
+    placeholders: [domain_role]
+
+  - id: SO6
+    week: 5
+    dimension: SOUL
+    text: "What makes you want to immediately disengage or leave the room?"
+    rationale_probe: "Most recent instance?"
+    energy_tax: mid
+
+  - id: SO7
+    week: 5
+    dimension: SOUL
+    text: "Your first reaction versus your second reaction when challenged or dismissed."
+    rationale_probe: "Which is the 'real you'?"
+    energy_tax: high
+
+  - id: SO8
+    week: 5
+    dimension: SOUL
+    text: "Decisions — more gut or more data? Fast or slow?"
+    rationale_probe: "Has this changed since you were younger?"
+    energy_tax: mid
+
+  - id: SO9
+    week: 5
+    dimension: SOUL
+    text: "Deepest professional fear?"
+    rationale_probe: "What does this fear make you avoid? What does it push you toward?"
+    energy_tax: high
+
+  - id: SO10
+    week: 5
+    dimension: SOUL
+    text: "Five years from now, how do you hope people describe your professional reputation?"
+    rationale_probe: "How far is current you from that description?"
+    energy_tax: high
+
+  # ─── Week 6 — BOUNDARIES + Failure Modes ───────────────────────────
+  - id: B1
+    week: 6
+    dimension: BOUNDARIES
+    text: "Three categories of engagements or projects you absolutely refuse."
+    rationale_probe: "Have you ever taken one and regretted it?"
+    energy_tax: mid
+
+  - id: B2
+    week: 6
+    dimension: BOUNDARIES
+    text: "Three categories of information you absolutely won't share."
+    rationale_probe: "Under what conditions would you break this?"
+    energy_tax: mid
+
+  - id: B3
+    week: 6
+    dimension: BOUNDARIES
+    text: "The kind of agent response that would most bother you. Describe it."
+    rationale_probe: "Why would that be a violation?"
+    energy_tax: high
+
+  - id: B4
+    week: 6
+    dimension: BOUNDARIES
+    text: "Two failure modes you slip into when stressed."
+    rationale_probe: "Do others notice?"
+    energy_tax: high
+
+  - id: B5
+    week: 6
+    dimension: BOUNDARIES
+    text: "Two blind spots you know you have."
+    rationale_probe: "Who told you? Do you agree?"
+    energy_tax: high
+
+  - id: B6
+    week: 6
+    dimension: BOUNDARIES
+    text: "What happens when someone really angers you — tone shift, behavior shift?"
+    rationale_probe: "How would someone close to you know 'she/he is really angry now'?"
+    energy_tax: high
+
+  - id: B7
+    week: 6
+    dimension: BOUNDARIES
+    text: "Topics you don't discuss (politics, religion, exes, former employers, etc.)?"
+    rationale_probe: "Whom would you make exceptions for?"
+    energy_tax: mid
+
+  - id: B8
+    week: 6
+    dimension: BOUNDARIES
+    text: "Red lines on agent-human division of labor — what must the human always do?"
+    rationale_probe: "Why those specifically?"
+    energy_tax: high
+
+  # ─── Week 7 — STATE setup + Triangulation Calibration ─────────────
+  - id: T1
+    week: 7
+    dimension: STATE
+    text: "Past 3 months' work focus + emotional baseline."
+    rationale_probe: null
+    energy_tax: low
+
+  - id: T2
+    week: 7
+    dimension: STATE
+    text: "This quarter's goals. What do you care about right now?"
+    rationale_probe: null
+    energy_tax: low
+
+  - id: T3
+    week: 7
+    dimension: STATE
+    text: "Recent energy level (1–10) + why."
+    rationale_probe: null
+    energy_tax: low
+
+  - id: T4
+    week: 7
+    dimension: SOUL
+    text: "I'll list 5 inferred core values from our past 6 weeks. Tell me which are accurate, and which are off."
+    rationale_probe: "For each one that's off, what did I misread?"
+    energy_tax: high
+    bot_initiated: true
+
+  - id: T5
+    week: 7
+    dimension: VOICE
+    text: "I've noticed possible contradictions between your stated values and your actual voice samples. Walk through these with me."
+    rationale_probe: "Which is the real you? Or are these two registers for different audiences?"
+    energy_tax: high
+    bot_initiated: true
+
+  - id: T6
+    week: 7
+    dimension: BOUNDARIES
+    text: "Coverage gap: these dimensions are under-represented. Quick fill?"
+    rationale_probe: null
+    energy_tax: mid
+    bot_initiated: true
+
+  # ─── Week 8 — Ship + monthly cadence (handled programmatically) ───
+
+# ─── Casual / energy-saving questions (10% random insert) ──────────
+casual_questions:
+  - "How's your week been?"
+  - "Tired?"
+  - "Anything on your mind before we start?"
+  - "Anything from last session you've been thinking about?"
+
+# ─── Default placeholder values for the agnostic shipping template ─
+# Operators substitute these in their forked copy.
+default_placeholders:
+  core_task: "your main work task"
+  primary_counterparty: "the person on the other side of your main interaction"
+  decision_partner: "the person you negotiate scope or budget with"
+  counterparty: "your typical professional counterpart"
+  domain_role: "professional in your field"

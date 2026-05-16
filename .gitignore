@@ -24,7 +24,9 @@ build/
 *.db
 *.db-shm
 *.db-wal
-data/
+# Runtime data dir at repo root only — must NOT match src/virtualme/data/
+# (package data: question-pool.yaml ships with the package).
+/data/
 sessions/
 
 # IDE
