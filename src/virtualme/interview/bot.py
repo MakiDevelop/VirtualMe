@@ -3,6 +3,7 @@ import logging
 from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
+from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
 from virtualme.interview.depth_evaluator import evaluate_depth
 from virtualme.interview.follow_up import generate_follow_up, select_rule
@@ -38,6 +39,15 @@ async def process_turn(
     override_week: int | None = None,
 ) -> str:
     settings = settings or Settings()
+    if settings.byok_enabled:
+        # BYOK gate runs before session/scrub/save_turn/any LLM call.
+        gate = await byok.run_byok_gate(interviewee_id, incoming_message, settings.byok_keys_dir)
+        if gate.reply is not None:
+            return gate.reply
+        # Interview LLM calls run on the interviewee's own key. The operator
+        # `claude` argument is intentionally shadowed and unused below.
+        assert gate.api_key is not None
+        claude = byok.build_client(gate.api_key)
     max_week = (
         settings.max_extraction_rounds
         if settings.adaptive_extraction

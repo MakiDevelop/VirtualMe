@@ -49,6 +49,14 @@ class Settings(BaseSettings):
         20,
         validation_alias=AliasChoices("reinjection_interval", "VIRTUALME_REINJECTION_INTERVAL"),
     )
+    byok_enabled: bool = Field(
+        False,
+        validation_alias=AliasChoices("byok_enabled", "VIRTUALME_BYOK_ENABLED"),
+    )
+    byok_keys_dir: str = Field(
+        "./data/keys",
+        validation_alias=AliasChoices("byok_keys_dir", "VIRTUALME_BYOK_KEYS_DIR"),
+    )
 
 
 def sqlite_path(database_url: str) -> str:
