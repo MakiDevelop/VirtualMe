@@ -1,0 +1,1024 @@
+version: 2
+status: draft
+source:
+  - Perplexity Max interview design handbook
+  - SuperGrok product flow review
+
+meta:
+  target_questions_per_dimension: 8
+  target_total_questions: 64
+  intake_questions: 5
+  default_follow_up_max: 2
+  production_enabled: false
+
+intake:
+  purpose: "在正式萃取前校準受訪者領域，避免後續題目過於泛用或 placeholder 外洩。"
+  completion_rule: "取得 domain_role、core_task、primary_counterparty、decision_partner；如果使用者不想定義，可先用 broad mode。"
+  questions:
+    - id: intake_01_domain
+      text: "在開始前，我想先知道你的主要領域或角色。你會怎麼介紹自己現在主要在做什麼？"
+      captures: [domain_role]
+      user_explain: "這會讓後面的問題更貼近你的工作與生活脈絡。"
+      follow_up_max: 1
+      stop_condition: "得到一個角色或領域描述。"
+      risk_level: low
+    - id: intake_02_core_task
+      text: "你最常反覆處理的核心工作或決策是什麼？"
+      captures: [core_task]
+      user_explain: "我會用這個校準後面的 SKILL 題，不會問得太泛。"
+      follow_up_max: 1
+      stop_condition: "得到一個主要工作流程或決策類型。"
+      risk_level: low
+    - id: intake_03_counterparty
+      text: "你平常最常跟哪些人互動？例如同事、客戶、主管、部屬、合作夥伴或社群朋友。"
+      captures: [primary_counterparty, counterparty]
+      user_explain: "這會讓 PEOPLE 和 VOICE 題更像真實情境。"
+      follow_up_max: 1
+      stop_condition: "得到 1-3 種常見互動對象。"
+      risk_level: low
+    - id: intake_04_decision_partner
+      text: "你通常跟誰討論範圍、優先順序、預算、時程或取捨？"
+      captures: [decision_partner]
+      user_explain: "這能幫我理解你做決策時真正需要協調的人。"
+      follow_up_max: 1
+      stop_condition: "得到一種決策協調對象；若沒有，標記為 mostly_self_decided。"
+      risk_level: low
+    - id: intake_05_use_case
+      text: "你希望 VirtualMe 之後主要幫你做什麼？回訊息、整理想法、替你判斷事情，還是別的？"
+      captures: [virtualme_use_case]
+      user_explain: "這會影響我優先萃取語氣、判斷邏輯，還是工作方法。"
+      follow_up_max: 1
+      stop_condition: "得到一個主要 use case。"
+      risk_level: low
+
+dimensions:
+  STATE:
+    name: "近況"
+    purpose: "當前優先級、近期壓力源、能量分佈、最近改變了什麼想法。"
+    avoid: "不要把短期狀態當成長期人格定論。"
+    completion_threshold: 75
+  HISTORY:
+    name: "人生歷程"
+    purpose: "轉折點、決定性事件、長期習慣的形成原因、困難中的行動選擇。"
+    avoid: "不要蒐集無詮釋的履歷流水帳。"
+    completion_threshold: 80
+  SOUL:
+    name: "靈魂・核心價值"
+    purpose: "核心信念、人生判準、行動背後的理由、重複出現的價值取捨。"
+    avoid: "不要收集沒有行為錨點的抽象自我標籤。"
+    completion_threshold: 85
+  PEOPLE:
+    name: "人際關係"
+    purpose: "信任建立機制、合作偏好、影響圈、關係中的期待與退出條件。"
+    avoid: "不要引導使用者八卦或評斷他人。"
+    completion_threshold: 80
+  SKILL:
+    name: "專業技能"
+    purpose: "可複製的工作流程、決策依據、工具偏好、實作與學習方法。"
+    avoid: "不要只收履歷式技能清單。"
+    completion_threshold: 80
+  JOURNAL:
+    name: "反思札記"
+    purpose: "反思頻率與深度、失敗消化方式、自我敘事與自我修正模式。"
+    avoid: "不要做心理治療或追問創傷細節。"
+    completion_threshold: 75
+  BOUNDARIES:
+    name: "界線・原則"
+    purpose: "不可接受線、拒絕方式、授權範圍、原則在壓力下如何維持。"
+    avoid: "不要收集政治正確但無行為依據的宣稱。"
+    completion_threshold: 85
+  VOICE:
+    name: "語氣・表達"
+    purpose: "說話節奏、慣用詞、訊息風格、衝突時表達、什麼話不會說。"
+    avoid: "不要只收使用者刻意表演的形象語氣。"
+    completion_threshold: 85
+
+progress_prompts:
+  p00_20: "我們剛起步，不用一次說完。今天我會一次只問一題，隨時可以停。"
+  p20_50: "我們已經有一些脈絡了，接下來會慢慢補你怎麼判斷、怎麼做事。"
+  p50_80: "已經過半了。後面會比較像在補你的思考模式和界線，可以說多說少。"
+  p80_95: "快到了，剩下是幾個缺口和說話風格樣本。"
+  p95_plus: "基本上都聊完了，最後會請你看哪些描述不像你。"
+
+transitions:
+  STATE_to_HISTORY: "我對你現在的狀態有初步感覺了。接下來想往前一點，理解你是怎麼走到現在。"
+  HISTORY_to_SOUL: "剛才的歷程裡有一些選擇很關鍵。接下來我想補你做選擇背後的判準。"
+  SOUL_to_PEOPLE: "你的價值判準比較清楚了。下一塊我想看它怎麼出現在你跟人的互動裡。"
+  PEOPLE_to_SKILL: "人際合作的模式有輪廓了。接下來我想看你實際怎麼做事、怎麼解題。"
+  SKILL_to_JOURNAL: "你的工作方法我抓到一些了。下一段想了解你事後怎麼復盤和修正。"
+  JOURNAL_to_BOUNDARIES: "反思方式聊完後，我想補你的界線：哪些事你會拒絕或不授權。"
+  BOUNDARIES_to_VOICE: "界線清楚後，最後要收的是你實際會怎麼說，讓 VirtualMe 回覆更像你。"
+  skip: "這個方向我們先放著。不是每題都一定要聊，我們直接換下一個比較適合的部分。"
+
+questions:
+  - id: state_01
+    dimension: STATE
+    stage: warmup
+    text: "最近這陣子生活過得怎麼樣？有什麼事讓你特別有動力，或是有點壓力？"
+    purpose: "捕捉當前情緒、壓力源、能量來源與短期目標。"
+    user_explain: "我想先從你現在的狀態開始，這樣 VirtualMe 回覆時比較貼近你目前的感受。"
+    expected_anchor: fact
+    acceptable_answers: [daily_story, emotion, concrete_example]
+    follow_ups:
+      - "它最近大概佔了你多少心力？"
+      - "你通常怎麼處理這種狀態？"
+    follow_up_max: 2
+    stop_condition: "取得 1-2 個具體事項與感受，或使用者想換話題。"
+    risk_level: low
+    optional: false
+  - id: state_02
+    dimension: STATE
+    stage: warmup
+    text: "目前你最想完成的 1-2 個目標是什麼？為什麼現在對你重要？"
+    purpose: "萃取短期目標與動機優先序。"
+    user_explain: "這能讓 VirtualMe 知道你現在最在意什麼，做判斷時比較不會偏掉。"
+    expected_anchor: fact
+    acceptable_answers: [goal, reason]
+    follow_ups:
+      - "如果只能先推一件，你會選哪一件？"
+      - "這件事卡住的主要原因是什麼？"
+    follow_up_max: 2
+    stop_condition: "有明確目標與理由。"
+    risk_level: low
+    optional: false
+  - id: state_03
+    dimension: STATE
+    stage: warmup
+    text: "這陣子最讓你感到放鬆或有趣的事情是什麼？"
+    purpose: "捕捉恢復能量方式與近期興趣。"
+    user_explain: "我想知道你怎麼充電，這會影響 VirtualMe 的語氣和建議方向。"
+    expected_anchor: fact
+    acceptable_answers: [activity, interest]
+    follow_ups:
+      - "它讓你放鬆的是哪一個部分？"
+    follow_up_max: 1
+    stop_condition: "有具體活動或明確表示不想多說。"
+    risk_level: low
+    optional: false
+  - id: state_04
+    dimension: STATE
+    stage: warmup
+    text: "最近有什麼事讓你覺得「還好有做這件事」？"
+    purpose: "連結當前成就感與正向動機來源。"
+    user_explain: "這題是想抓你最近覺得值得的事情。"
+    expected_anchor: fact
+    acceptable_answers: [story, feeling]
+    follow_ups:
+      - "如果沒做，現在會有什麼不同？"
+      - "它讓你對自己多理解了什麼？"
+    follow_up_max: 2
+    stop_condition: "有事件與價值感連結。"
+    risk_level: low
+    optional: false
+  - id: state_05
+    dimension: STATE
+    stage: warmup
+    text: "如果下個月你只能改善一件事，你會想先改善什麼？"
+    purpose: "萃取當前瓶頸與短期期待。"
+    user_explain: "這能讓 VirtualMe 知道你近期最想往哪裡調整。"
+    expected_anchor: fact
+    acceptable_answers: [plan, bottleneck]
+    follow_ups:
+      - "它現在為什麼還沒解決？"
+    follow_up_max: 1
+    stop_condition: "說出一件事與原因。"
+    risk_level: low
+    optional: false
+  - id: state_06
+    dimension: STATE
+    stage: warmup
+    text: "最近你最常分心想的事情是什麼？"
+    purpose: "捕捉目前認知負荷與隱性壓力。"
+    user_explain: "這不是要分析你，只是想知道最近什麼事情最佔腦容量。"
+    expected_anchor: fact
+    acceptable_answers: [concern, recurring_thought]
+    follow_ups:
+      - "它通常在什麼時候冒出來？"
+    follow_up_max: 1
+    stop_condition: "取得一個反覆出現的念頭或使用者跳過。"
+    risk_level: medium
+    optional: true
+  - id: state_07
+    dimension: STATE
+    stage: warmup
+    text: "最近有沒有什麼事情改變了你的想法或習慣？"
+    purpose: "萃取近期認知更新。"
+    user_explain: "近期改變會讓 VirtualMe 不只像過去的你，也比較像現在的你。"
+    expected_anchor: pattern
+    acceptable_answers: [change, trigger]
+    follow_ups:
+      - "這個改變是你主動選的，還是被情境推著走？"
+    follow_up_max: 1
+    stop_condition: "有具體改變與觸發原因。"
+    risk_level: low
+    optional: false
+  - id: state_08
+    dimension: STATE
+    stage: warmup
+    text: "如果用一個天氣或電量形容你最近的狀態，會是什麼？"
+    purpose: "低壓取得能量狀態與自我感受。"
+    user_explain: "這題比較輕鬆，讓我抓你現在大概是滿電、中電還是低電。"
+    expected_anchor: fact
+    acceptable_answers: [metaphor, energy_level]
+    follow_ups:
+      - "是什麼讓它變成這個狀態？"
+    follow_up_max: 1
+    stop_condition: "有比喻或能量描述。"
+    risk_level: low
+    optional: false
+
+  - id: history_01
+    dimension: HISTORY
+    stage: timeline
+    text: "可以簡單分享一下你是怎麼一步步走到現在這個職涯或生活階段的嗎？"
+    purpose: "建立人生與職涯時間線。"
+    user_explain: "我想先聽你的故事，這樣 VirtualMe 才知道你是怎麼形成現在的樣子。"
+    expected_anchor: fact
+    acceptable_answers: [timeline, turning_point]
+    follow_ups:
+      - "其中哪一段最不像你原本預期？"
+      - "哪一個選擇最關鍵？"
+    follow_up_max: 2
+    stop_condition: "出現 2-3 個主要階段。"
+    risk_level: low
+    optional: false
+  - id: history_02
+    dimension: HISTORY
+    stage: timeline
+    text: "你職涯中有沒有某個轉捩點，讓你走上一條不同的路？"
+    purpose: "萃取 life turning point 與選擇邏輯。"
+    user_explain: "轉捩點通常會留下很穩定的判斷模式。"
+    expected_anchor: fact
+    acceptable_answers: [incident, choice]
+    follow_ups:
+      - "如果當時選了另一條路，你覺得現在會在哪裡？"
+      - "那次之後，你判斷事情有變嗎？"
+    follow_up_max: 2
+    stop_condition: "描述事件、選擇與後續影響。"
+    risk_level: low
+    optional: false
+  - id: history_03
+    dimension: HISTORY
+    stage: timeline
+    text: "你什麼時候第一次覺得「我知道自己在做什麼了」？"
+    purpose: "找能力自信形成時刻。"
+    user_explain: "這能幫我理解你怎麼建立自信。"
+    expected_anchor: fact
+    acceptable_answers: [moment, confidence_signal]
+    follow_ups:
+      - "是什麼讓你有這種感覺？"
+    follow_up_max: 1
+    stop_condition: "有具體情境與感覺來源。"
+    risk_level: low
+    optional: false
+  - id: history_04
+    dimension: HISTORY
+    stage: timeline
+    text: "有沒有某個決定，你當初覺得在賭，但後來證明賭對了？"
+    purpose: "萃取風險偏好與直覺信任。"
+    user_explain: "我想看你在不確定時怎麼下注。"
+    expected_anchor: pattern
+    acceptable_answers: [risk, decision, result]
+    follow_ups:
+      - "當時你看見了什麼別人沒看見的訊號？"
+      - "你現在還會做同樣決定嗎？"
+    follow_up_max: 2
+    stop_condition: "有風險、判斷依據與結果。"
+    risk_level: low
+    optional: false
+  - id: history_05
+    dimension: HISTORY
+    stage: timeline
+    text: "你人生或工作中最艱難的一段時期是什麼？你那時候怎麼撐過去的？"
+    purpose: "萃取逆境因應模式。"
+    user_explain: "如果你願意說，這能幫我理解你遇到壓力時真正會怎麼做。"
+    expected_anchor: pattern
+    acceptable_answers: [hard_time, coping]
+    follow_ups:
+      - "那段時間結束後，你有什麼不一樣？"
+    follow_up_max: 1
+    stop_condition: "說出因應方式；若涉及創傷或不願說，立即跳過。"
+    risk_level: high
+    optional: true
+  - id: history_06
+    dimension: HISTORY
+    stage: timeline
+    text: "有沒有某個人，在你不知不覺中改變了你的方向？"
+    purpose: "找隱性影響者與學習來源。"
+    user_explain: "影響你的人，通常也會影響你後來怎麼看人和做選擇。"
+    expected_anchor: fact
+    acceptable_answers: [person, influence]
+    follow_ups:
+      - "他影響你的是想法、做法，還是價值觀？"
+    follow_up_max: 1
+    stop_condition: "說出影響機制。"
+    risk_level: low
+    optional: false
+  - id: history_07
+    dimension: HISTORY
+    stage: timeline
+    text: "如果五年前的你看到現在的你，最驚訝的會是什麼？"
+    purpose: "萃取自我變化與長期敘事。"
+    user_explain: "這題是想看你覺得自己哪裡真的變了。"
+    expected_anchor: pattern
+    acceptable_answers: [self_change, surprise]
+    follow_ups:
+      - "這個變化是你主動選的，還是被環境推著走？"
+    follow_up_max: 1
+    stop_condition: "指出一個變化與原因。"
+    risk_level: low
+    optional: false
+  - id: history_08
+    dimension: HISTORY
+    stage: timeline
+    text: "有沒有哪個你曾經後悔的專業決定，後來反而變成重要教訓？"
+    purpose: "萃取錯誤後的學習與判斷修正。"
+    user_explain: "不是要檢討你，是想知道你怎麼從錯誤裡調整判斷。"
+    expected_anchor: principle
+    acceptable_answers: [mistake, lesson]
+    follow_ups:
+      - "如果重來一次，你會用什麼標準判斷？"
+    follow_up_max: 1
+    stop_condition: "有教訓或使用者不想談。"
+    risk_level: medium
+    optional: true
+
+  - id: soul_01
+    dimension: SOUL
+    stage: depth
+    text: "你做過最不划算、但還是覺得應該做的決定是什麼？"
+    purpose: "萃取在代價下仍守住的價值。"
+    user_explain: "這題能看出什麼東西對你來說比效率或利益更重要。"
+    expected_anchor: principle
+    acceptable_answers: [decision, tradeoff, reason]
+    follow_ups:
+      - "為什麼那時候還是覺得值得？"
+      - "現在回頭看，你會改變嗎？"
+    follow_up_max: 2
+    stop_condition: "說明值得付出的理由。"
+    risk_level: low
+    optional: false
+  - id: soul_02
+    dimension: SOUL
+    stage: depth
+    text: "你什麼時候會覺得「這件事我沒辦法妥協」？"
+    purpose: "萃取非協商性原則。"
+    user_explain: "這能讓 VirtualMe 知道哪些地方不能替你退讓。"
+    expected_anchor: principle
+    acceptable_answers: [boundary, reason]
+    follow_ups:
+      - "上次發生是什麼情境？"
+      - "如果對方繼續施壓，你會怎麼做？"
+    follow_up_max: 2
+    stop_condition: "有具體情境與理由。"
+    risk_level: medium
+    optional: false
+  - id: soul_03
+    dimension: SOUL
+    stage: depth
+    text: "你怎麼判斷一件事值得你花時間？"
+    purpose: "萃取資源分配底層邏輯。"
+    user_explain: "這會影響 VirtualMe 幫你排序事情時的判準。"
+    expected_anchor: principle
+    acceptable_answers: [criteria, example]
+    follow_ups:
+      - "最近一次用這個標準做判斷是什麼時候？"
+    follow_up_max: 1
+    stop_condition: "給出可重複判斷框架。"
+    risk_level: low
+    optional: false
+  - id: soul_04
+    dimension: SOUL
+    stage: depth
+    text: "有沒有某個信念，你以前很相信，但現在已經放棄或修正了？"
+    purpose: "萃取信念演化與可塑性。"
+    user_explain: "這能讓 VirtualMe 不只記住你相信什麼，也知道你怎麼改變想法。"
+    expected_anchor: pattern
+    acceptable_answers: [belief_change, trigger]
+    follow_ups:
+      - "是什麼讓你改變？"
+      - "改變後你做事有什麼不同？"
+    follow_up_max: 2
+    stop_condition: "說出具體轉變原因。"
+    risk_level: medium
+    optional: false
+  - id: soul_05
+    dimension: SOUL
+    stage: depth
+    text: "什麼樣的人或事會讓你打從心底佩服？"
+    purpose: "用投射方式萃取隱性價值觀。"
+    user_explain: "你佩服什麼，通常也透露你重視什麼。"
+    expected_anchor: pattern
+    acceptable_answers: [admiration, traits]
+    follow_ups:
+      - "你自己在哪些地方也有這個特質？"
+    follow_up_max: 1
+    stop_condition: "出現兩個以上特質。"
+    risk_level: low
+    optional: false
+  - id: soul_06
+    dimension: SOUL
+    stage: depth
+    text: "如果有人說你做事太堅持或太死板，你會怎麼回應？"
+    purpose: "萃取自我認知、價值防衛與例外條件。"
+    user_explain: "這題是想看你怎麼看待自己的堅持。"
+    expected_anchor: pattern
+    acceptable_answers: [reaction, self_view]
+    follow_ups:
+      - "你覺得這評價公平嗎？"
+    follow_up_max: 1
+    stop_condition: "有真實回應或自我評估。"
+    risk_level: medium
+    optional: true
+  - id: soul_07
+    dimension: SOUL
+    stage: depth
+    text: "最近有什麼事讓你覺得「這才是我想要的人生」？"
+    purpose: "萃取滿足感來源與人生方向。"
+    user_explain: "我想知道什麼狀態最像你想活成的樣子。"
+    expected_anchor: principle
+    acceptable_answers: [story, value]
+    follow_ups:
+      - "它滿足的是你哪一個需求？"
+    follow_up_max: 1
+    stop_condition: "有具體事件與價值。"
+    risk_level: low
+    optional: false
+  - id: soul_08
+    dimension: SOUL
+    stage: depth
+    text: "如果只能留一句話給後輩，你會想留什麼？"
+    purpose: "萃取長期價值優先排序。"
+    user_explain: "這能濃縮你覺得最值得傳下去的判準。"
+    expected_anchor: principle
+    acceptable_answers: [message, reason]
+    follow_ups:
+      - "為什麼是這句，不是別的？"
+    follow_up_max: 1
+    stop_condition: "有一句話與理由。"
+    risk_level: low
+    optional: false
+
+  - id: people_01
+    dimension: PEOPLE
+    stage: relationship
+    text: "你通常怎麼判斷一個人可不可以信任？有沒有什麼小細節？"
+    purpose: "萃取信任模型與人際判斷準則。"
+    user_explain: "這會讓 VirtualMe 知道你怎麼看人、怎麼決定能不能合作。"
+    expected_anchor: principle
+    acceptable_answers: [criteria, example]
+    follow_ups:
+      - "有沒有哪次你因此看準或看錯？"
+      - "哪個訊號最重要？"
+    follow_up_max: 2
+    stop_condition: "有明確信任指標。"
+    risk_level: medium
+    optional: false
+  - id: people_02
+    dimension: PEOPLE
+    stage: relationship
+    text: "工作上你最欣賞的合作夥伴，通常有什麼特質？"
+    purpose: "萃取理想協作模式。"
+    user_explain: "你欣賞的合作方式，通常也是你願意長期投入的關係模式。"
+    expected_anchor: pattern
+    acceptable_answers: [traits, example]
+    follow_ups:
+      - "這些特質裡，哪一個最不能少？"
+    follow_up_max: 1
+    stop_condition: "說出兩個以上特質。"
+    risk_level: low
+    optional: false
+  - id: people_03
+    dimension: PEOPLE
+    stage: relationship
+    text: "如果你跟某人合作不順，你通常怎麼處理？"
+    purpose: "萃取衝突管理模式。"
+    user_explain: "這能讓 VirtualMe 知道你面對摩擦時會直接處理、調整方式，還是退出。"
+    expected_anchor: pattern
+    acceptable_answers: [conflict, action]
+    follow_ups:
+      - "有沒有一次你選擇不處理，讓它過去？"
+    follow_up_max: 1
+    stop_condition: "描述行動策略。"
+    risk_level: medium
+    optional: false
+  - id: people_04
+    dimension: PEOPLE
+    stage: relationship
+    text: "誰對你的人生或工作影響最大？他是怎麼影響你的？"
+    purpose: "萃取影響圈與學習來源。"
+    user_explain: "影響你的人，會幫我理解你後來怎麼判斷與合作。"
+    expected_anchor: fact
+    acceptable_answers: [person, influence]
+    follow_ups:
+      - "如果他看到現在的你，他可能會怎麼說？"
+    follow_up_max: 1
+    stop_condition: "說出影響機制。"
+    risk_level: low
+    optional: false
+  - id: people_05
+    dimension: PEOPLE
+    stage: relationship
+    text: "你在什麼情況下會對別人關上門，不太想再合作或靠近？"
+    purpose: "萃取關係邊界 trigger。"
+    user_explain: "這題是想知道人際上哪些事會讓你踩煞車。"
+    expected_anchor: principle
+    acceptable_answers: [trigger, boundary]
+    follow_ups:
+      - "這種情況發生後，還有機會打開嗎？"
+    follow_up_max: 1
+    stop_condition: "有具體觸發條件。"
+    risk_level: high
+    optional: true
+  - id: people_06
+    dimension: PEOPLE
+    stage: relationship
+    text: "你通常主動聯繫什麼樣的人？什麼樣的人你會放著等對方來？"
+    purpose: "萃取主動性與關係優先排序。"
+    user_explain: "這能看出你怎麼分配人際注意力。"
+    expected_anchor: pattern
+    acceptable_answers: [relationship_pattern, priority]
+    follow_ups:
+      - "最近最常主動聯繫的是誰？為什麼？"
+    follow_up_max: 1
+    stop_condition: "說出主動/被動差異。"
+    risk_level: low
+    optional: false
+  - id: people_07
+    dimension: PEOPLE
+    stage: relationship
+    text: "你比較喜歡跟很像你的人合作，還是跟互補的人合作？"
+    purpose: "萃取合作偏好與互補容忍度。"
+    user_explain: "這會影響 VirtualMe 幫你判斷合作對象時的偏好。"
+    expected_anchor: pattern
+    acceptable_answers: [preference, condition]
+    follow_ups:
+      - "什麼情況下你會改選另一種人？"
+    follow_up_max: 1
+    stop_condition: "有偏好與例外條件。"
+    risk_level: low
+    optional: false
+  - id: people_08
+    dimension: PEOPLE
+    stage: relationship
+    text: "有沒有一段關係，讓你學會了以後不要怎麼跟人合作？"
+    purpose: "萃取負面經驗形成的合作原則。"
+    user_explain: "如果你願意說，這能幫我避開 VirtualMe 未來踩到同樣雷點。"
+    expected_anchor: principle
+    acceptable_answers: [lesson, boundary]
+    follow_ups:
+      - "那次之後你多了哪一條判斷規則？"
+    follow_up_max: 1
+    stop_condition: "有學到的合作原則；使用者不願說即跳過。"
+    risk_level: high
+    optional: true
+
+  - id: skill_01
+    dimension: SKILL
+    stage: work_method
+    text: "你在目前工作中做得最順手的是什麼？可以說一次具體過程嗎？"
+    purpose: "萃取核心工作 SOP。"
+    user_explain: "我想知道你實際怎麼做，而不是只知道你會什麼。"
+    expected_anchor: pattern
+    acceptable_answers: [process, example]
+    follow_ups:
+      - "為什麼你會選這個方法，不選別的方法？"
+    follow_up_max: 1
+    stop_condition: "描述完整流程。"
+    risk_level: low
+    optional: false
+  - id: skill_02
+    dimension: SKILL
+    stage: work_method
+    text: "當你面對一個完全陌生的問題，你第一步通常做什麼？"
+    purpose: "萃取學習與問題解決起點。"
+    user_explain: "這能讓 VirtualMe 遇到新問題時像你一樣起手。"
+    expected_anchor: pattern
+    acceptable_answers: [first_step, example]
+    follow_ups:
+      - "上次這樣做的是什麼問題？"
+    follow_up_max: 1
+    stop_condition: "描述行動步驟。"
+    risk_level: low
+    optional: false
+  - id: skill_03
+    dimension: SKILL
+    stage: work_method
+    text: "你做決定時，有沒有固定會問自己的問題或過濾機制？"
+    purpose: "萃取決策框架。"
+    user_explain: "這是讓 VirtualMe 做選擇時不亂猜的核心。"
+    expected_anchor: principle
+    acceptable_answers: [decision_filter, example]
+    follow_ups:
+      - "最近一次用這個框架做了什麼決定？"
+    follow_up_max: 1
+    stop_condition: "出現一個以上決策問題或框架。"
+    risk_level: low
+    optional: false
+  - id: skill_04
+    dimension: SKILL
+    stage: work_method
+    text: "你做過最複雜的一個工作任務是什麼？你怎麼拆解它？"
+    purpose: "萃取複雜任務分解邏輯。"
+    user_explain: "這題可以幫我理解你處理複雜問題的步驟。"
+    expected_anchor: pattern
+    acceptable_answers: [complex_task, decomposition]
+    follow_ups:
+      - "哪一步最難？當時怎麼解決？"
+    follow_up_max: 1
+    stop_condition: "出現分解步驟。"
+    risk_level: medium
+    optional: false
+  - id: skill_05
+    dimension: SKILL
+    stage: work_method
+    text: "你大概怎麼衡量一個工作成果夠好了？"
+    purpose: "萃取品質判斷標準。"
+    user_explain: "這會影響 VirtualMe 什麼時候該停、什麼時候該繼續打磨。"
+    expected_anchor: principle
+    acceptable_answers: [quality_bar, example]
+    follow_ups:
+      - "有沒有交出去後覺得其實沒做好的例子？"
+    follow_up_max: 1
+    stop_condition: "給出可操作標準。"
+    risk_level: low
+    optional: false
+  - id: skill_06
+    dimension: SKILL
+    stage: work_method
+    text: "你工作上最依賴的工具、系統或流程是什麼？沒有它你會怎樣？"
+    purpose: "萃取工具偏好與外部記憶方式。"
+    user_explain: "工具通常透露你怎麼組織事情。"
+    expected_anchor: fact
+    acceptable_answers: [tool, reason]
+    follow_ups:
+      - "是什麼讓你開始用它？"
+    follow_up_max: 1
+    stop_condition: "說出工具與原因。"
+    risk_level: low
+    optional: false
+  - id: skill_07
+    dimension: SKILL
+    stage: work_method
+    text: "你有沒有搞砸過某件事，但從那次學到很重要的教訓？"
+    purpose: "萃取失敗後形成的隱性知識。"
+    user_explain: "不是要檢討，是想知道你怎麼把錯誤變成方法。"
+    expected_anchor: principle
+    acceptable_answers: [failure, lesson]
+    follow_ups:
+      - "那個教訓現在還在影響你嗎？"
+    follow_up_max: 1
+    stop_condition: "說出具體教訓；不願說即跳過。"
+    risk_level: high
+    optional: true
+  - id: skill_08
+    dimension: SKILL
+    stage: work_method
+    text: "你協作時比較常主導還是配合？什麼情況會換角色？"
+    purpose: "萃取協作角色與彈性。"
+    user_explain: "這能讓 VirtualMe 知道你在團隊裡通常怎麼站位。"
+    expected_anchor: pattern
+    acceptable_answers: [role_preference, condition]
+    follow_ups:
+      - "最近一次你換角色是什麼情況？"
+    follow_up_max: 1
+    stop_condition: "有角色偏好與情境條件。"
+    risk_level: low
+    optional: false
+
+  - id: journal_01
+    dimension: JOURNAL
+    stage: reflection
+    text: "你通常怎麼想清楚一件事？是寫下來、說出來、走路想，還是睡一覺？"
+    purpose: "萃取思考模態。"
+    user_explain: "這能讓 VirtualMe 知道你怎麼整理腦中的東西。"
+    expected_anchor: pattern
+    acceptable_answers: [reflection_method, example]
+    follow_ups:
+      - "最近一次這樣做是在想什麼？"
+    follow_up_max: 1
+    stop_condition: "說出至少一個具體方法。"
+    risk_level: low
+    optional: false
+  - id: journal_02
+    dimension: JOURNAL
+    stage: reflection
+    text: "當一件事沒有照你預期發展，你通常第一反應是什麼？"
+    purpose: "萃取失敗或落差的初始反應。"
+    user_explain: "這不是要評價情緒，而是想知道你遇到落差時怎麼開始處理。"
+    expected_anchor: pattern
+    acceptable_answers: [reaction, action]
+    follow_ups:
+      - "你會馬上行動，還是需要先消化？"
+    follow_up_max: 1
+    stop_condition: "有情緒與行動描述。"
+    risk_level: medium
+    optional: false
+  - id: journal_03
+    dimension: JOURNAL
+    stage: reflection
+    text: "你怎麼知道自己復盤完了？有沒有什麼結束訊號？"
+    purpose: "萃取反思完結機制。"
+    user_explain: "這能讓 VirtualMe 知道你什麼時候覺得一件事已經想清楚。"
+    expected_anchor: principle
+    acceptable_answers: [completion_signal, criteria]
+    follow_ups:
+      - "如果一直復盤不完，你會怎麼做？"
+    follow_up_max: 1
+    stop_condition: "說出具體結束訊號。"
+    risk_level: low
+    optional: false
+  - id: journal_04
+    dimension: JOURNAL
+    stage: reflection
+    text: "你有在記錄什麼嗎？例如筆記、日記、語音備忘或任務紀錄。"
+    purpose: "萃取外化反思工具。"
+    user_explain: "記錄方式會影響 VirtualMe 怎麼保存和整理你的想法。"
+    expected_anchor: fact
+    acceptable_answers: [tool, habit]
+    follow_ups:
+      - "你之後還會回去看嗎？"
+    follow_up_max: 1
+    stop_condition: "說明記錄方式。"
+    risk_level: low
+    optional: false
+  - id: journal_05
+    dimension: JOURNAL
+    stage: reflection
+    text: "最近有沒有哪件事，你事後回想覺得下次可以改？"
+    purpose: "萃取自我修正模式。"
+    user_explain: "這會讓 VirtualMe 更像一個會修正的你，而不是只記住靜態偏好。"
+    expected_anchor: pattern
+    acceptable_answers: [review, adjustment]
+    follow_ups:
+      - "下次你會具體怎麼改？"
+    follow_up_max: 1
+    stop_condition: "有反思與調整。"
+    risk_level: low
+    optional: false
+  - id: journal_06
+    dimension: JOURNAL
+    stage: reflection
+    text: "當你描述自己是什麼樣的人，你最常用哪幾個詞？"
+    purpose: "萃取自我敘事標籤，再用行為校準。"
+    user_explain: "我會把這些詞當線索，不會直接當定論。"
+    expected_anchor: fact
+    acceptable_answers: [self_label, caveat]
+    follow_ups:
+      - "哪一個詞其實更真實，但你比較少說出來？"
+    follow_up_max: 1
+    stop_condition: "出現兩個以上標籤或使用者不想標籤自己。"
+    risk_level: medium
+    optional: true
+  - id: journal_07
+    dimension: JOURNAL
+    stage: reflection
+    text: "最近有沒有一個你一直在想、但還沒有答案的問題？"
+    purpose: "萃取當前探索邊界與認知負荷。"
+    user_explain: "這能讓 VirtualMe 知道你現在腦中還有哪些未完成的思考。"
+    expected_anchor: fact
+    acceptable_answers: [open_question]
+    follow_ups:
+      - "你目前比較偏向哪個答案？"
+    follow_up_max: 1
+    stop_condition: "描述問題本身。"
+    risk_level: low
+    optional: false
+  - id: journal_08
+    dimension: JOURNAL
+    stage: reflection
+    text: "你比較常把自己看成學習者、解題者、照顧者、推動者，還是別的角色？"
+    purpose: "萃取自我敘事框架。"
+    user_explain: "這不是人格測驗，只是想抓你怎麼理解自己的角色。"
+    expected_anchor: pattern
+    acceptable_answers: [self_frame, reason]
+    follow_ups:
+      - "這個角色是你喜歡的，還是你習慣承擔的？"
+    follow_up_max: 1
+    stop_condition: "有角色框架與理由。"
+    risk_level: medium
+    optional: true
+
+  - id: boundaries_01
+    dimension: BOUNDARIES
+    stage: limits
+    text: "你上次說不，是什麼時候？你是怎麼說的？"
+    purpose: "萃取拒絕語氣與時機。"
+    user_explain: "這能讓 VirtualMe 知道什麼時候該替你拒絕，以及怎麼拒絕比較像你。"
+    expected_anchor: fact
+    acceptable_answers: [refusal, wording]
+    follow_ups:
+      - "對方反應如何？你後來有後悔嗎？"
+    follow_up_max: 1
+    stop_condition: "說出拒絕方式。"
+    risk_level: low
+    optional: false
+  - id: boundaries_02
+    dimension: BOUNDARIES
+    stage: limits
+    text: "有沒有什麼要求，不管是誰提的，你都不會答應？"
+    purpose: "萃取絕對邊界。"
+    user_explain: "這題是為了避免 VirtualMe 未來替你答應不該答應的事。"
+    expected_anchor: principle
+    acceptable_answers: [hard_limit, reason]
+    follow_ups:
+      - "如果是你很在乎的人提呢？"
+    follow_up_max: 1
+    stop_condition: "有明確條件。"
+    risk_level: medium
+    optional: false
+  - id: boundaries_03
+    dimension: BOUNDARIES
+    stage: limits
+    text: "如果有人越過你的界線，你一般怎麼反應？"
+    purpose: "萃取邊界被侵犯時的行動模式。"
+    user_explain: "我想知道你會直接說、提醒一次，還是默默退出。"
+    expected_anchor: pattern
+    acceptable_answers: [boundary_response]
+    follow_ups:
+      - "你會直接說，還是先觀察？"
+    follow_up_max: 1
+    stop_condition: "描述行動模式。"
+    risk_level: medium
+    optional: false
+  - id: boundaries_04
+    dimension: BOUNDARIES
+    stage: limits
+    text: "在工作上，你覺得什麼樣的要求算是超過份際？"
+    purpose: "萃取工作邊界與授權範圍。"
+    user_explain: "這會讓 VirtualMe 知道哪些工作要求可以接，哪些要擋。"
+    expected_anchor: principle
+    acceptable_answers: [work_boundary, example]
+    follow_ups:
+      - "你遇過嗎？當時怎麼處理？"
+    follow_up_max: 1
+    stop_condition: "給出具體類型與處理方式。"
+    risk_level: low
+    optional: false
+  - id: boundaries_05
+    dimension: BOUNDARIES
+    stage: limits
+    text: "你有沒有因為說了不該說的話而後悔？那次你為什麼說出來？"
+    purpose: "萃取自我揭露邊界。"
+    user_explain: "如果你願意說，這能幫我理解你在什麼情況下會越過自己的說話界線。"
+    expected_anchor: fact
+    acceptable_answers: [regret, disclosure]
+    follow_ups:
+      - "現在遇到類似情況，你會怎麼做？"
+    follow_up_max: 1
+    stop_condition: "說出事件與原因；不願說即跳過。"
+    risk_level: high
+    optional: true
+  - id: boundaries_06
+    dimension: BOUNDARIES
+    stage: limits
+    text: "什麼事情你可以授權別人替你決定？什麼事情一定要自己來？"
+    purpose: "萃取 delegation boundary。"
+    user_explain: "這對 VirtualMe 很重要，因為它需要知道哪些能代答、哪些不能代你決定。"
+    expected_anchor: principle
+    acceptable_answers: [delegation, limit]
+    follow_ups:
+      - "這條線是怎麼形成的？"
+    follow_up_max: 1
+    stop_condition: "有可授權/不可授權清單。"
+    risk_level: low
+    optional: false
+  - id: boundaries_07
+    dimension: BOUNDARIES
+    stage: limits
+    text: "如果有人一直催你、逼你快點做決定，你通常怎麼反應？"
+    purpose: "萃取壓力下的界線維持方式。"
+    user_explain: "這能讓 VirtualMe 知道你被推著走時，會怎麼守住節奏。"
+    expected_anchor: pattern
+    acceptable_answers: [pressure_response]
+    follow_ups:
+      - "什麼情況下你會讓步？"
+    follow_up_max: 1
+    stop_condition: "有壓力回應與例外條件。"
+    risk_level: medium
+    optional: false
+  - id: boundaries_08
+    dimension: BOUNDARIES
+    stage: limits
+    text: "有沒有什麼話，不管誰說了，你都很難忘記或原諒？"
+    purpose: "萃取極高敏感觸發語。"
+    user_explain: "這題比較敏感，可以跳過。它只是幫我知道哪些話 VirtualMe 永遠不要說。"
+    expected_anchor: fact
+    acceptable_answers: [trigger_phrase]
+    follow_ups: []
+    follow_up_max: 0
+    stop_condition: "只要提到主題即可，不強求細節。"
+    risk_level: high
+    optional: true
+
+  - id: voice_01
+    dimension: VOICE
+    stage: voice_sample
+    text: "你平常跟朋友傳訊息，跟跟老闆或客戶說話，語氣差很多嗎？怎麼個不同法？"
+    purpose: "萃取語境切換模式。"
+    user_explain: "這能讓 VirtualMe 在不同對象面前切換成像你的語氣。"
+    expected_anchor: pattern
+    acceptable_answers: [style_difference, example]
+    follow_ups:
+      - "能舉一個你最近會傳的訊息例子嗎？"
+    follow_up_max: 1
+    stop_condition: "說出至少一個語氣差異。"
+    risk_level: low
+    optional: false
+  - id: voice_02
+    dimension: VOICE
+    stage: voice_sample
+    text: "你有沒有覺得只有你會這樣說的口頭禪、慣用詞或習慣說法？"
+    purpose: "萃取語言特徵詞。"
+    user_explain: "這些小詞會讓 VirtualMe 的回覆更像你。"
+    expected_anchor: fact
+    acceptable_answers: [phrase, origin]
+    follow_ups:
+      - "這個說法是怎麼來的？"
+    follow_up_max: 1
+    stop_condition: "出現一個以上具體詞語。"
+    risk_level: low
+    optional: false
+  - id: voice_03
+    dimension: VOICE
+    stage: voice_sample
+    text: "當你不同意某件事，你一般怎麼說出來？可以舉最近的例子嗎？"
+    purpose: "萃取異議表達模式。"
+    user_explain: "這能讓 VirtualMe 不只知道你不同意，也知道你會怎麼說。"
+    expected_anchor: pattern
+    acceptable_answers: [disagreement, wording]
+    follow_ups:
+      - "對方反應後，你通常會怎麼接？"
+    follow_up_max: 1
+    stop_condition: "有具體場景或句子。"
+    risk_level: medium
+    optional: false
+  - id: voice_04
+    dimension: VOICE
+    stage: voice_sample
+    text: "你比較喜歡直接說結論，還是先鋪陳再說？什麼情況會換另一種？"
+    purpose: "萃取資訊架構偏好。"
+    user_explain: "這會影響 VirtualMe 回覆時先講答案還是先講脈絡。"
+    expected_anchor: pattern
+    acceptable_answers: [communication_structure, exception]
+    follow_ups:
+      - "最近一次你改用另一種方式，是為什麼？"
+    follow_up_max: 1
+    stop_condition: "有偏好與場景依據。"
+    risk_level: low
+    optional: false
+  - id: voice_05
+    dimension: VOICE
+    stage: voice_sample
+    text: "有人誤解你說的話，讓你覺得很無奈，那次是什麼情況？"
+    purpose: "萃取溝通誤差的高敏感區。"
+    user_explain: "這能讓 VirtualMe 避免用容易被誤解的方式替你說話。"
+    expected_anchor: fact
+    acceptable_answers: [misunderstanding, repair]
+    follow_ups:
+      - "後來你怎麼補救？"
+    follow_up_max: 1
+    stop_condition: "描述具體誤解與應對；不願回憶即跳過。"
+    risk_level: high
+    optional: true
+  - id: voice_06
+    dimension: VOICE
+    stage: voice_sample
+    text: "你打字時會用 emoji、貼圖或很多標點嗎？還是偏簡短乾淨？"
+    purpose: "萃取書寫風格特徵。"
+    user_explain: "這些格式習慣會直接影響 VirtualMe 看起來像不像你。"
+    expected_anchor: fact
+    acceptable_answers: [format_preference]
+    follow_ups: []
+    follow_up_max: 0
+    stop_condition: "有明確偏好。"
+    risk_level: low
+    optional: false
+  - id: voice_07
+    dimension: VOICE
+    stage: voice_sample
+    text: "如果要跟一位剛認識但你尊重的前輩傳訊息，你實際會怎麼寫？"
+    purpose: "取得正式但自然的 first-contact voice sample。"
+    user_explain: "這是角色扮演題，直接收一段可用語氣樣本。"
+    expected_anchor: fact
+    acceptable_answers: [message_sample]
+    follow_ups:
+      - "這段裡你刻意避免了什麼語氣？"
+    follow_up_max: 1
+    stop_condition: "取得一段訊息樣本。"
+    risk_level: low
+    optional: false
+  - id: voice_08
+    dimension: VOICE
+    stage: voice_sample
+    text: "如果要跟熟人說一個對他不利的決定，你會怎麼講？直接示範給我看。"
+    purpose: "取得衝突或壞消息情境的 voice sample。"
+    user_explain: "這能讓 VirtualMe 在難講的情境裡，也保留你的語氣和分寸。"
+    expected_anchor: pattern
+    acceptable_answers: [message_sample, conflict_tone]
+    follow_ups:
+      - "你這樣說時，最想避免對方產生什麼感覺？"
+    follow_up_max: 1
+    stop_condition: "取得示範句與意圖。"
+    risk_level: medium
+    optional: false
