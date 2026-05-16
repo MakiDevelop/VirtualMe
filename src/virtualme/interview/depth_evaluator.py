@@ -5,7 +5,8 @@ from enum import StrEnum
 
 from anthropic import AsyncAnthropic
 
-from virtualme.interview.models import MODEL_FAST
+from virtualme.interview.json_utils import extract_json_payload
+from virtualme.interview.models import MODEL_FAST, create_message
 from virtualme.storage.db import Layer
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,8 @@ THIN/SUFFICIENT; use "fact" if not applicable.
 Question: {current_question}
 Answer: {answer}
 """
-    response = await claude.messages.create(
+    response = await create_message(
+        claude,
         model=MODEL_FAST,
         max_tokens=120,
         temperature=0,
@@ -65,7 +67,7 @@ Answer: {answer}
     )
     raw = response.content[0].text.strip()
     try:
-        data = json.loads(raw)
+        data = json.loads(extract_json_payload(raw))
         kind = TurnKind(str(data.get("kind", "")).upper())
         depth_text = str(data.get("depth", Layer.FACT.value)).lower()
         depth = Layer(depth_text if depth_text in {layer.value for layer in Layer} else Layer.FACT)
@@ -79,7 +81,7 @@ Answer: {answer}
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         logger.warning("Turn assessment JSON parse failed: %s; raw=%r", exc, raw)
         return TurnAssessment(
-            kind=TurnKind.EVASION,
+            kind=TurnKind.SUFFICIENT,
             depth=Layer.FACT,
             needs_follow_up=False,
             confidence=0.0,

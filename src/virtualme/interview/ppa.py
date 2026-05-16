@@ -5,8 +5,9 @@ from collections import Counter
 from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
+from virtualme.interview.json_utils import extract_json_payload
 from virtualme.interview.lang import tokens
-from virtualme.interview.models import MODEL_FAST, MODEL_STANDARD
+from virtualme.interview.models import MODEL_FAST, MODEL_STANDARD, create_message
 from virtualme.interview.triples import PersonaTriple
 
 
@@ -38,7 +39,8 @@ async def _stage1_general_response(dialogue_context: str, claude: AsyncAnthropic
         "# Task: Output assistant's response to user in JSON.\n"
         'Format: {"assistant": <response>}'
     )
-    response = await claude.messages.create(
+    response = await create_message(
+        claude,
         model=MODEL_FAST,
         max_tokens=150,
         temperature=0.3,
@@ -75,7 +77,8 @@ async def _stage3_refine(
         "# Output assistant's response to user in JSON.\n"
         'Format: {"assistant": <assistant refined response>}'
     )
-    response = await claude.messages.create(
+    response = await create_message(
+        claude,
         model=MODEL_STANDARD,
         max_tokens=512,
         temperature=0.3,
@@ -103,7 +106,7 @@ def _triple_text(triple: PersonaTriple) -> str:
 
 def _assistant_text(text: str) -> str:
     try:
-        parsed = json.loads(text)
+        parsed = json.loads(extract_json_payload(text))
     except json.JSONDecodeError:
         return text.strip()
     return str(parsed.get("assistant", text)).strip()

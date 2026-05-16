@@ -18,7 +18,7 @@ from virtualme.interview.commands import (
 from virtualme.interview.depth_evaluator import TurnKind, evaluate_depth
 from virtualme.interview.follow_up import generate_follow_up, select_rule
 from virtualme.interview.lang import INTERVIEW_OUTPUT_LANGUAGE
-from virtualme.interview.models import MODEL_DEEP
+from virtualme.interview.models import MODEL_DEEP, create_message
 from virtualme.interview.pii import scrub_pii
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.interview.session_lifecycle import (
@@ -462,7 +462,8 @@ exact meaning, depth, and directness. Do not advise, praise, soften, or add comm
 Accumulated anchors: {anchors}
 Coverage gaps: {gaps}
 """
-    response = await claude.messages.create(
+    response = await create_message(
+        claude,
         model=MODEL_DEEP,
         max_tokens=180,
         temperature=0.3,

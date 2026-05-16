@@ -2,7 +2,8 @@ import json
 
 from anthropic import AsyncAnthropic
 
-from virtualme.interview.models import MODEL_STANDARD
+from virtualme.interview.json_utils import extract_json_payload
+from virtualme.interview.models import MODEL_STANDARD, create_message
 from virtualme.storage.db import Anchor, Dimension, Layer, Question, Turn
 
 
@@ -19,14 +20,15 @@ Use layers: fact, pattern, principle.
 Question: {current_question.text}
 Answer: {turn.content}
 """
-    response = await claude.messages.create(
+    response = await create_message(
+        claude,
         model=MODEL_STANDARD,
         max_tokens=500,
         temperature=0,
         messages=[{"role": "user", "content": prompt}],
     )
     try:
-        rows = json.loads(response.content[0].text)
+        rows = json.loads(extract_json_payload(response.content[0].text))
     except json.JSONDecodeError:
         rows = []
     anchors: list[Anchor] = []

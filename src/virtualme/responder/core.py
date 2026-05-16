@@ -6,7 +6,7 @@ from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 
 from virtualme.config import Settings
-from virtualme.interview.models import MODEL_STANDARD
+from virtualme.interview.models import MODEL_STANDARD, create_message
 from virtualme.responder.liability import is_liability_topic
 
 DISCLOSURE_FOOTER = "\n\n— 本訊息由 AI 助理依本人風格草擬, 僅供參考。"
@@ -36,7 +36,8 @@ async def respond(
         "- 回答簡潔、專業、貼近她的語氣。\n"
         "- 涉及法律或權責的問題, 給方向但提醒對方須向本人確認。"
     )
-    response = await claude.messages.create(
+    response = await create_message(
+        claude,
         model=MODEL_STANDARD,
         max_tokens=600,
         temperature=0.4,

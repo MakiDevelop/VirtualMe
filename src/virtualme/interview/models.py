@@ -15,6 +15,21 @@ from __future__ import annotations
 
 import os
 
+from anthropic import AsyncAnthropic
+
 MODEL_FAST = os.getenv("VIRTUALME_MODEL_FAST", "claude-haiku-4-5")
 MODEL_STANDARD = os.getenv("VIRTUALME_MODEL_STANDARD", "claude-sonnet-4-6")
 MODEL_DEEP = os.getenv("VIRTUALME_MODEL_DEEP", "claude-opus-4-7")
+
+_NO_TEMPERATURE_MODELS = {"claude-opus-4-7"}
+
+
+async def create_message(client: AsyncAnthropic, **kwargs):
+    """Central messages.create wrapper.
+
+    Strips params unsupported by the target model (currently: temperature for
+    claude-opus-4-7).
+    """
+    if kwargs.get("model") in _NO_TEMPERATURE_MODELS:
+        kwargs.pop("temperature", None)
+    return await client.messages.create(**kwargs)

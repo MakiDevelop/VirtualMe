@@ -29,7 +29,7 @@ from anthropic import (
     UnprocessableEntityError,
 )
 
-from virtualme.interview.models import MODEL_FAST
+from virtualme.interview.models import MODEL_FAST, create_message
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,8 @@ async def validate_api_key(api_key: str) -> bool:
     """
     async with build_client(api_key) as client:
         try:
-            await client.messages.create(
+            await create_message(
+                client,
                 model=MODEL_FAST,
                 max_tokens=1,
                 messages=[{"role": "user", "content": "ping"}],

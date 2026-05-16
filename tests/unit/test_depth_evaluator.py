@@ -59,7 +59,18 @@ async def test_depth_principle():
 
 async def test_depth_parse_failure_is_conservative():
     assessment = await evaluate_depth("answer", "Question?", _Claude("not json"))
-    assert assessment.kind == TurnKind.EVASION
+    assert assessment.kind == TurnKind.SUFFICIENT
     assert assessment.depth == Layer.FACT
     assert assessment.needs_follow_up is False
     assert assessment.parse_failed is True
+
+
+async def test_depth_accepts_markdown_fenced_json():
+    assessment = await evaluate_depth(
+        "I value directness.",
+        "What do you value?",
+        _Claude(f"```json\n{_assessment(depth='principle')}\n```"),
+    )
+    assert assessment.kind == TurnKind.SUFFICIENT
+    assert assessment.depth == Layer.PRINCIPLE
+    assert assessment.parse_failed is False
