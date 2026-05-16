@@ -27,9 +27,17 @@ This draft combines two scout outputs:
   `docs/research/virtualme-domain-pack-8-fields.md`.
 - SuperGrok: product experience flow, progress-aware resume language,
   user-control moments, and repair scripts.
+- Strategy reports:
+  - `/Users/maki/Documents/VirtualMe_開發建議報告書.md`
+  - `/Users/maki/Documents/VirtualMe_深度策略報告書_v2.md`
+  - synthesized into [`10-personality-infrastructure.md`](10-personality-infrastructure.md)
 
 Perplexity is used as the question and method backbone. SuperGrok is used as
 the conversation experience layer.
+
+The strategy reports add one product constraint to v2: the interview must
+extract decision style and tradeoff behavior, not only voice or life-story
+material.
 
 ## Conversation Flow
 
@@ -118,6 +126,8 @@ Engine v2 should not rely on anchor count alone. Use three scores:
 - `coverage_score`: active anchors per dimension.
 - `scope_score`: how many dimensions have at least one usable anchor.
 - `yield_score`: whether anchors include fact, pattern, and principle layers.
+- `decision_score`: whether the archive includes explicit tradeoff, pressure,
+  refusal, and boundary-decision signals.
 
 Initial implementation can keep the existing weighted completeness score, but
 the UI copy should expose only coarse ranges.
@@ -304,6 +314,33 @@ Acceptance criteria:
 - if intake is already complete, the bot skips intake and starts STATE
 - status reply can show the captured domain context
 
+### Phase 3.5: Decision And Tradeoff Extraction Metadata
+
+Before v2 is used in production, generic and domain questions should identify
+whether they collect decision-style signal.
+
+Recommended metadata:
+
+```yaml
+decision_targets:
+  - tradeoff_hierarchy
+  - pressure_response
+  - refusal_condition
+  - escalation_threshold
+  - stable_contradiction
+```
+
+Initial implementation can keep this metadata optional. The selector should
+eventually prefer questions that fill missing decision targets when anchor
+coverage is high but decision signal is weak.
+
+Acceptance criteria:
+
+- at least one question per relevant dimension collects a tradeoff or pressure
+  signal
+- status/completeness can report when decision signal is still weak
+- no v2 production switch until decision targets exist in the draft pool
+
 ### Phase 4: V2 Selector Behind Feature Flag
 
 Add a feature flag such as:
@@ -333,6 +370,7 @@ Acceptance criteria:
   - domain context changes SKILL / PEOPLE / VOICE / BOUNDARIES wording
   - high-risk questions are not consecutive
   - repeated questions are avoided
+  - decision-target gaps influence selection after basic coverage exists
 
 ### Phase 5: Conversation Experience Layer
 
