@@ -267,6 +267,28 @@ async def test_process_turn_light_greeting_cleans_old_bridge_prefix(tmp_path):
     assert "我先記下這點" not in reply
 
 
+async def test_process_turn_light_greeting_rerenders_stored_placeholder_question(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.BOUNDARIES, text="Clean question")]}
+    )
+    settings = Settings(anthropic_api_key=SecretStr("k"))
+    session = await db.get_or_create_session("u1", week=1)
+    await db.set_current_question_id(session.id, "Q1")
+    await db.save_turn(
+        session.id,
+        "assistant",
+        "當你要回推 {decision_partner} 時 把你會用的原話講給我聽。",
+    )
+
+    reply = await process_turn("u1", "哈囉", _Claude(), db, selector, settings)
+
+    assert "{decision_partner}" not in reply
+    assert "剛才問的是" not in reply
+    assert "界線・原則" in reply
+    assert "繁中第一題" in reply
+
+
 async def test_process_turn_light_greeting_mid_progress_asks_to_continue(tmp_path):
     db = await _new_db(tmp_path)
     selector = QuestionSelector(

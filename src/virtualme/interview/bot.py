@@ -408,11 +408,12 @@ async def _handle_light_greeting(
     if last_asked:
         is_restart_resume = _is_restart_reply(last_asked)
         last_asked = _clean_resume_question(last_asked)
-        if is_restart_resume:
+        if is_restart_resume or _has_unresolved_placeholder(last_asked):
+            rendered_question = await _final_reply(interviewee_id, question, active_client, db)
             reply = (
                 f"{progress_prefix}\n"
                 f"我們從【{DIMENSION_LABELS[question.dimension]}】開始。\n"
-                f"{last_asked}"
+                f"{rendered_question}"
             )
         else:
             reply = (
@@ -448,6 +449,10 @@ def _clean_resume_question(content: str) -> str:
 
 def _is_restart_reply(content: str) -> bool:
     return content.strip().startswith("好, 我會從頭開始萃取。")
+
+
+def _has_unresolved_placeholder(content: str) -> bool:
+    return "{" in content or "}" in content
 
 
 def _progress_resume_prefix(total_score: float) -> str:
