@@ -104,12 +104,43 @@ observed.
   optional: false
 ```
 
+## Stop Condition: Altitude Criterion
+
+> Added per STG-036 (`~/.claude/mem/staging.md`). Dogfood interviews showed the
+> engine stops as soon as the interviewee says anything that *sounds* concrete,
+> so it collects worldview platitudes ("命運自有安排", "世事無常", "那是人性") as
+> if they were anchors.
+
+A `stop_condition` is satisfied only when the answer reaches **incident
+altitude**, not **aphorism altitude**:
+
+- **Incident altitude (stop is allowed)**: a specific time, place, person,
+  quoted line, or a choice made under a named constraint — a decision or
+  tradeoff with edges.
+- **Aphorism altitude (do NOT stop)**: a worldview statement, proverb, or
+  fate / human-nature generalization. Treat it as a *deflection*, not an answer.
+
+When an answer is at aphorism altitude, the bot must re-narrow toward a concrete
+incident instead of advancing (e.g. "不用是大道理——有沒有一件具體的事，當時你
+怎麼選的？"). This re-narrow does not count against `follow_up_max`.
+
+> Open design point: the interaction between this re-narrow and the
+> disengagement rule ("two short answers in a row → stop probing") is not yet
+> resolved. STG-036 implementation must reconcile them.
+>
+> Open methodology point: distinguishing "deflection into philosophy" from
+> "philosophy that is genuinely this person's trait" is unresolved — routed to
+> Scout investigation, see `docs/TRUNK.md` §6.
+
 ## Selector Rules
 
 - Prefer staying inside the current dimension until it reaches the completion
   threshold.
 - Avoid asking two high-risk questions in a row.
 - Do not ask more than two probes for the same question.
+- If an answer is at aphorism altitude (see "Stop Condition: Altitude
+  Criterion"), do not count the question as satisfied; re-narrow toward a
+  concrete incident.
 - If the user gives two short or defensive answers in a row, stop probing and
   switch to a safer question.
 - If the user asks for progress or purpose, answer that meta question before

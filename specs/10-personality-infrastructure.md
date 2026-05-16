@@ -1,7 +1,12 @@
 # Personality Infrastructure Strategy
 
-> Status: strategic product direction. This document does not change the
-> production interview runtime by itself.
+> Status: long-range category vision. This is NOT a build spec. It does not
+> change the production interview runtime, and nothing in it authorizes work on
+> its own.
+>
+> Near-term priority and "what is on the trunk right now" are governed by
+> `docs/TRUNK.md`. Any "Future Module" below stays unbuilt until it passes the
+> Trunk Check in `docs/TRUNK.md` §5. On conflict, TRUNK.md wins.
 
 ## Thesis
 
@@ -61,7 +66,7 @@ common traps:
 - It treats the persona archive as local, portable, and versionable instead of
   as hidden platform memory.
 
-Recent dogfood also shows the interview can surface useful raw material:
+Recent dogfood produced some candidate raw material:
 
 - professional dignity sensitivity
 - exhaustion from unreasonable projects
@@ -69,8 +74,18 @@ Recent dogfood also shows the interview can surface useful raw material:
 - emotional restraint under conflict
 - trust in explicit ownership and follow-through
 
-These are not finished persona rules yet, but they are meaningful candidate
-signals.
+Caveat: these are unverified candidates, not evidence the engine is working
+well. In the dogfood transcript several of them — especially the fatalistic
+framing — appeared *because the bot accepted a worldview platitude and stopped
+probing*, i.e. they sit at aphorism altitude, not incident altitude (see
+`09-interview-engine-v2.md` > Stop Condition: Altitude Criterion). Whether
+fatalism is a genuine trait of this interviewee or just a deflection cannot be
+decided from the current transcript. Each candidate must be re-drilled per
+STG-036 before it becomes persona material.
+
+[未定論] The general question — how to tell "deflection into philosophy" from
+"philosophy that is genuinely the person's trait" — is routed to Scout
+investigation; see `docs/TRUNK.md` §6.
 
 ## Main Product Risks
 
@@ -100,7 +115,7 @@ choice. Engine v2 should move from semantic mining toward decision extraction:
 - What would make them refuse?
 - What changes under pressure?
 
-### 3. Cross-Model Fidelity Is A Core Challenge
+### 3. Cross-Model Fidelity (Real, But A Later Problem)
 
 The same persona archive will behave differently across models:
 
@@ -109,10 +124,27 @@ The same persona archive will behave differently across models:
 - Gemini may over-analyze.
 - Grok may over-index on provocation.
 
-VirtualMe therefore needs a model adapter layer and fidelity benchmarks. The
-persona core should not be treated as a raw prompt pasted into every model.
+This is a real challenge, but it is NOT a near-term risk and NOT in scope for
+interview engine v2. It cannot be meaningfully addressed before single-model
+fidelity is proven (see Future Modules > Model Adapter Layer, and
+`docs/TRUNK.md` §4 trap #8).
+
+[未定論] Whether cross-model portability should be designed in early or retro-
+fitted late is a genuine open sequencing question. The judgement that it is "a
+later problem" comes from a Claude-authored analysis and therefore carries some
+perspective bias. Routed to Scout investigation; see `docs/TRUNK.md` §6.
 
 ## Future Modules
+
+> Framing caveat: the items below are written as named "Engines / Layers /
+> Systems", but most are *refinements to the single v2 interview + extraction
+> pipeline*, not separate subsystems. Decision extraction and contradiction
+> tracking should land as pipeline features (tracked under STG-036), not as
+> standalone engines.
+>
+> The Model Adapter Layer and Fidelity Benchmark System are DEFERRED: they must
+> not be started until single-model persona fidelity has been demonstrated.
+> Starting them earlier is a detour — see `docs/TRUNK.md` §4 trap #8.
 
 ### Decision Style Engine
 
@@ -214,9 +246,14 @@ The bot should still protect the user experience:
 Near term:
 
 1. Keep v1 as production until v2 is feature-flagged and dogfooded.
-2. Add v2 adapter and selector behind `VIRTUALME_INTERVIEW_ENGINE=v2`.
-3. Extend v2 question metadata with decision/tradeoff targets.
-4. Add coarse milestone output such as 30-minute Snapshot.
+2. Build the Snapshot thin slice first:
+   - SOUL-lite hypothesis synthesis from existing anchors / triples.
+   - Mini blind test materials.
+   - "This feels unlike me" feedback routing back to dimensions / anchors.
+3. Extend v2 question metadata with decision/tradeoff targets and answer
+   altitude.
+4. Add v2 adapter and selector behind `VIRTUALME_INTERVIEW_ENGINE=v2` only
+   after the Snapshot loop can produce a usable feedback signal.
 
 Mid term:
 
@@ -239,4 +276,3 @@ Long term:
 - Do not treat a generated summary as a verified persona.
 - Do not switch production to v2 before dogfood proves better extraction.
 - Do not make contradictions disappear just to produce a cleaner profile.
-
