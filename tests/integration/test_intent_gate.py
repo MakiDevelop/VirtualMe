@@ -223,13 +223,14 @@ async def test_consecutive_evasion_advances_to_next_question(tmp_path):
     first_reply = await process_turn("u1", "不要問這個", claude, db, selector, settings)
     second_reply = await process_turn("u1", "還是不想答", claude, db, selector, settings)
 
-    assert "請說說您最近的工作狀況" in first_reply
-    assert second_reply == "What skill matters most?"
+    assert "先停" in first_reply
+    assert "換題" in first_reply
+    assert "先停" in second_reply
     async with aiosqlite.connect(db.path) as conn:
         row = await (
             await conn.execute("SELECT current_question_id FROM sessions WHERE interviewee_id = ?", ("u1",))
         ).fetchone()
-    assert row == ("Q2",)
+    assert row == (None,)
     assert claude.messages.anchor_calls == 0
     assert claude.messages.follow_up_calls == 0
 

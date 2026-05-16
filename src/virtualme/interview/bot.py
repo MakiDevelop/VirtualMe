@@ -277,13 +277,11 @@ async def _handle_non_answer(
     count = await db.record_question_non_answer(
         interviewee_id, current_question.id, session.week
     )
+    if not is_meta:
+        return _pause_current_question()
     if count < 2:
-        if is_meta:
-            return await _bridge_to_current_question(
-                interviewee_id, user_text, current_question, active_client, db
-            )
-        return await _rapport_to_current_question(
-            interviewee_id, current_question, active_client, db
+        return await _bridge_to_current_question(
+            interviewee_id, user_text, current_question, active_client, db
         )
 
     next_question = selector.select_next(
@@ -296,12 +294,8 @@ async def _handle_non_answer(
     )
     await db.reset_question_non_answer(interviewee_id, current_question.id)
     if next_question is None:
-        if is_meta:
-            return await _bridge_to_current_question(
-                interviewee_id, user_text, current_question, active_client, db
-            )
-        return await _rapport_to_current_question(
-            interviewee_id, current_question, active_client, db
+        return await _bridge_to_current_question(
+            interviewee_id, user_text, current_question, active_client, db
         )
 
     await db.set_current_question_id(session.id, next_question.id)
@@ -329,11 +323,11 @@ async def _bridge_to_current_question(
     return f"{prefix}我們回到剛才這題。\n{asked}"
 
 
-async def _rapport_to_current_question(
-    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
-) -> str:
-    asked = await _final_reply(interviewee_id, question, claude, db)
-    return f"我懂，這題先不用想太複雜。\n{asked}"  # noqa: RUF001
+def _pause_current_question() -> str:
+    return (
+        "好, 這題我們先停在這裡。"
+        "如果你想換題、休息一下, 或指定要談哪一塊, 直接跟我說。"
+    )
 
 
 def _asks_for_traditional_chinese(text: str) -> bool:
