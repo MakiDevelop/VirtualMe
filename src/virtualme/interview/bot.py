@@ -406,12 +406,20 @@ async def _handle_light_greeting(
     progress_prefix = _progress_resume_prefix(completeness.total_score)
     last_asked = await db.get_last_assistant_content(session.id)
     if last_asked:
+        is_restart_resume = _is_restart_reply(last_asked)
         last_asked = _clean_resume_question(last_asked)
-        reply = (
-            f"{progress_prefix}\n"
-            f"我們目前在【{DIMENSION_LABELS[question.dimension]}】這一塊。\n"
-            f"剛才問的是:\n{last_asked}"
-        )
+        if is_restart_resume:
+            reply = (
+                f"{progress_prefix}\n"
+                f"我們從【{DIMENSION_LABELS[question.dimension]}】開始。\n"
+                f"{last_asked}"
+            )
+        else:
+            reply = (
+                f"{progress_prefix}\n"
+                f"我們目前在【{DIMENSION_LABELS[question.dimension]}】這一塊。\n"
+                f"剛才問的是:\n{last_asked}"
+            )
     else:
         rendered_question = await _final_reply(interviewee_id, question, active_client, db)
         reply = (
@@ -425,11 +433,21 @@ async def _handle_light_greeting(
 
 def _clean_resume_question(content: str) -> str:
     cleaned = content.strip()
+    if cleaned.startswith("好, 我會從頭開始萃取。"):
+        lines = cleaned.splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith("封存摘要:"):
+                return "\n".join(lines[index + 1 :]).strip()
+        return lines[-1].strip() if lines else cleaned
     if "我先記下這點" in cleaned and "我們回到剛才這題" in cleaned:
         return cleaned.split("\n", 1)[-1].strip()
     if cleaned.startswith("我們先回到剛才這題。"):
         return cleaned.split("\n", 1)[-1].strip()
     return cleaned
+
+
+def _is_restart_reply(content: str) -> bool:
+    return content.strip().startswith("好, 我會從頭開始萃取。")
 
 
 def _progress_resume_prefix(total_score: float) -> str:

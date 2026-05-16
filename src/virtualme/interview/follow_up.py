@@ -39,6 +39,8 @@ def select_rule(
     answer: str, depth: Layer, accumulated_anchors: list[Anchor]
 ) -> FollowUpRule | None:
     normalized = answer.lower()
+    if _signals_already_answered(answer):
+        return None
     if any(marker in normalized for marker in ABSTRACT_MARKERS) and length_units(answer) <= 14:
         return FollowUpRule.R4_ABSTRACT_TO_CONCRETE
     if depth == Layer.FACT:
@@ -49,6 +51,8 @@ def select_rule(
         return None
     if _has_triangulated_repeat(answer, accumulated_anchors):
         return FollowUpRule.R5_REPEAT_TO_TRIANGULATE
+    if _has_specific_cjk_rationale(answer):
+        return None
     return None if _has_concrete_example(answer) else FollowUpRule.R3_PRINCIPLE_TO_COUNTEREXAMPLE
 
 
@@ -115,3 +119,63 @@ def _has_concrete_example(answer: str) -> bool:
         "記得",
     )
     return any(marker in lowered for marker in markers)
+
+
+def _signals_already_answered(answer: str) -> bool:
+    normalized = answer.lower()
+    markers = (
+        "前面說過",
+        "剛剛說過",
+        "已經講過",
+        "已經說過",
+        "不是說了",
+        "as i said",
+        "like i said",
+        "already said",
+    )
+    return any(marker in normalized for marker in markers)
+
+
+def _has_specific_cjk_rationale(answer: str) -> bool:
+    """Avoid asking another "why" when a principle answer already carries a reason.
+
+    This intentionally stays lightweight: no semantic model, just CJK markers
+    that indicate the user gave a concrete rationale or behavioral evidence.
+    """
+    if length_units(answer) < 10:
+        return False
+    behavior_markers = (
+        "會",
+        "會不會",
+        "一定",
+        "每次",
+        "通常",
+        "主動",
+        "持續",
+        "花時間",
+        "下班",
+        "私人時間",
+        "任務",
+        "工作",
+        "專案",
+        "交班",
+        "回報",
+        "追查",
+        "時程",
+    )
+    rationale_markers = (
+        "因為",
+        "所以",
+        "讓我",
+        "讓人",
+        "代表",
+        "表示",
+        "認真",
+        "放心",
+        "確定",
+        "穩定",
+        "不會",
+    )
+    return any(marker in answer for marker in behavior_markers) and any(
+        marker in answer for marker in rationale_markers
+    )

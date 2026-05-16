@@ -163,6 +163,36 @@ async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_pat
     assert sessions[-1][3] == "Q1"
 
 
+async def test_light_greeting_after_restart_does_not_replay_restart_ack(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {
+            1: [
+                Question(
+                    id="Q1",
+                    week=1,
+                    dimension=Dimension.STATE,
+                    text="How has work been?",
+                )
+            ]
+        }
+    )
+    settings = Settings(
+        anthropic_api_key=SecretStr("k"),
+        persona_export_dir=str(tmp_path / "personas"),
+    )
+
+    restart_reply = await process_turn("u1", "重頭開始萃取", _Claude(), db, selector, settings)
+    reply = await process_turn("u1", "哈囉", _Claude(), db, selector, settings)
+
+    assert "從頭開始萃取" in restart_reply
+    assert "才剛開始" in reply
+    assert "剛才問的是" not in reply
+    assert "封存摘要" not in reply
+    assert "從頭開始萃取" not in reply
+    assert "繁中第一題" in reply
+
+
 async def test_process_turn_light_greeting_starts_first_question(tmp_path):
     db = await _new_db(tmp_path)
     selector = QuestionSelector(
@@ -277,6 +307,54 @@ async def test_process_turn_light_greeting_high_progress_encourages_finish(tmp_p
     assert "快完成了" in reply
     assert "再收一點關鍵細節" in reply
     assert "請談談你的界線。" in reply
+
+
+async def test_status_query_after_pause_does_not_advance_question(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {
+            1: [
+                Question(id="Q1", week=1, dimension=Dimension.HISTORY, text="History question"),
+                Question(id="Q2", week=1, dimension=Dimension.PEOPLE, text="People question"),
+            ]
+        }
+    )
+    settings = Settings(anthropic_api_key=SecretStr("k"))
+    session = await db.get_or_create_session("u1", week=1)
+    await db.set_current_question_id(session.id, "Q1")
+    await db.save_turn(
+        session.id,
+        "assistant",
+        "好, 這題我們先停在這裡。如果你想換題、休息一下, 或指定要談哪一塊, 直接跟我說。",
+    )
+
+    reply = await process_turn("u1", "目前訪談的進度如何?", _Claude(), db, selector, settings)
+
+    assert "總完成度" in reply
+    assert "People question" not in reply
+    assert await db.get_current_question_id(session.id) == "Q1"
+
+
+async def test_status_query_uses_current_question_dimension_not_last_assistant_text(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {
+            1: [
+                Question(id="QH", week=1, dimension=Dimension.HISTORY, text="History question"),
+                Question(id="QS", week=1, dimension=Dimension.SKILL, text="Skill question"),
+            ]
+        }
+    )
+    settings = Settings(anthropic_api_key=SecretStr("k"))
+    session = await db.get_or_create_session("u1", week=1)
+    await db.set_current_question_id(session.id, "QS")
+    await db.save_turn(session.id, "assistant", "我們目前在【人生歷程】這一塊。")
+
+    reply = await process_turn("u1", "上面的訪談是針對哪一個人格主題?", _Claude(), db, selector, settings)
+
+    assert "我們現在正在收集的人格維度是【專業技能】" in reply
+    assert "人生歷程: 0%" in reply
+    assert "人生歷程: 0% (0 anchors, 0 confirmed) ← 目前" not in reply
 
 
 async def test_process_turn_retalk_pins_dimension_question(tmp_path):
