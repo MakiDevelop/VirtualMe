@@ -100,19 +100,17 @@ async def process_turn(
             reply = await _final_reply(interviewee_id, next_question or DEFAULT_QUESTION, claude, db)
 
     await db.save_turn(session.id, "assistant", reply)
-    if settings.use_ppa:
-        turns_so_far = await db.load_session_turns(session.id)
-        extracted = await finalize_session_if_closing(
-            session_id=session.id,
-            interviewee_id=interviewee_id,
-            user_text=incoming_message,
-            bot_reply=reply,
-            turns=turns_so_far,
-            claude=claude,
-            db=db,
-        )
-        if extracted:
-            logger.info("Session %s closed: extracted %s triples", session.id, extracted)
+    turns_so_far = await db.load_session_turns(session.id)
+    extracted = await finalize_session_if_closing(
+        session_id=session.id,
+        interviewee_id=interviewee_id,
+        user_text=incoming_message,
+        turns=turns_so_far,
+        claude=claude,
+        db=db,
+    )
+    if extracted:
+        logger.info("Session %s closed: extracted %s triples", session.id, extracted)
     return reply
 
 

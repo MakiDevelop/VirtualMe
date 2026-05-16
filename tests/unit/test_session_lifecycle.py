@@ -9,15 +9,24 @@ from virtualme.storage.db import Turn
 
 
 def test_is_session_closing_true():
-    assert is_session_closing("好累了,今天先這樣", "好的,下次再聊")
+    assert is_session_closing("好累了,今天先這樣")
 
 
 def test_is_session_closing_false():
-    assert not is_session_closing("我覺得", "OK")
+    assert not is_session_closing("我覺得")
 
 
 def test_closing_phrase_in_non_closing_context_does_not_close():
-    assert not is_session_closing("bye is what I never say", "OK")
+    assert not is_session_closing("bye is what I never say")
+
+
+def test_is_session_closing_without_bot_echo():
+    assert is_session_closing("bye")
+    assert is_session_closing("今天先這樣了")
+
+
+def test_closing_phrase_in_long_context_does_not_close():
+    assert not is_session_closing("I was tired of the old workflow so I rebuilt it")
 
 
 def test_is_session_stale_true_for_old_turn():
@@ -53,7 +62,6 @@ async def test_finalize_session_if_closing_extracts_and_saves(monkeypatch):
         7,
         "u1",
         "i'm done",
-        "see you next time",
         turns,
         object(),
         FakeDB(),
@@ -79,6 +87,6 @@ async def test_finalize_session_if_closing_normal_turn_returns_zero(monkeypatch)
             raise AssertionError("should not complete")
 
     monkeypatch.setattr(session_lifecycle, "extract_triples_from_session", fake_extract)
-    count = await finalize_session_if_closing(7, "u1", "normal", "OK", [], object(), FakeDB())
+    count = await finalize_session_if_closing(7, "u1", "normal", [], object(), FakeDB())
     assert count == 0
     assert not called

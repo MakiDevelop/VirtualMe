@@ -11,6 +11,7 @@ simple local checks avoid extra dependencies and reduce accidental Claude calls 
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 
 from anthropic import AsyncAnthropic
@@ -36,22 +37,25 @@ CLOSING_PHRASES_USER = [
     "let's stop",
 ]
 
-CLOSING_PHRASES_BOT = [
-    "下次",
-    "再聊",
-    "today",
-    "next time",
-    "see you",
-    "until then",
-]
+# After stripping recognised closing phrases, a genuine closing message has
+# little left. This guards against a closing word buried in a longer sentence
+# (e.g. "bye is what I never say" must NOT end the session).
+CLOSING_RESIDUAL_MAX = 4
 
 
-def is_session_closing(user_text: str, bot_reply: str) -> bool:
-    user_lower = user_text.lower().strip()
-    bot_lower = bot_reply.lower()
-    user_signal = any(phrase in user_lower for phrase in CLOSING_PHRASES_USER)
-    bot_signal = any(phrase in bot_lower for phrase in CLOSING_PHRASES_BOT)
-    return user_signal and bot_signal
+def is_session_closing(user_text: str) -> bool:
+    lowered = user_text.lower().strip()
+    if not lowered:
+        return False
+    matched = [phrase for phrase in CLOSING_PHRASES_USER if phrase in lowered]
+    if not matched:
+        return False
+    residual = lowered
+    # remove longest phrases first so nested phrases are fully consumed
+    for phrase in sorted(matched, key=len, reverse=True):
+        residual = residual.replace(phrase, "")
+    residual = re.sub(r"[\W_]", "", residual)
+    return len(residual) <= CLOSING_RESIDUAL_MAX
 
 
 def is_session_stale(last_turn_at: datetime, threshold_minutes: int = 30) -> bool:
@@ -64,12 +68,11 @@ async def finalize_session_if_closing(
     session_id: int,
     interviewee_id: str,
     user_text: str,
-    bot_reply: str,
     turns: list[Turn],
     claude: AsyncAnthropic,
     db: DB,
 ) -> int:
-    if not is_session_closing(user_text, bot_reply):
+    if not is_session_closing(user_text):
         return 0
 
     extracted = await _extract_and_complete(session_id, interviewee_id, turns, claude, db)
