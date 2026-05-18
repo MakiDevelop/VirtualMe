@@ -124,7 +124,14 @@ class GenerateProfileRequest:
     """User asked to export the current snapshot/persona draft."""
 
 
-InterviewCommand = StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest
+@dataclass
+class RevokeKeyRequest:
+    """User asked to forget the stored Claude API key."""
+
+
+InterviewCommand = (
+    StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest | RevokeKeyRequest
+)
 
 
 GENERATE_PROFILE_KEYWORDS = [
@@ -139,6 +146,19 @@ GENERATE_PROFILE_KEYWORDS = [
     "export persona",
     "generate profile",
     "export profile",
+]
+
+REVOKE_KEY_KEYWORDS = [
+    "刪除 api key",
+    "刪除apikey",
+    "忘記 api key",
+    "移除 api key",
+    "撤銷 api key",
+    "刪除 claude key",
+    "忘記 claude key",
+    "delete api key",
+    "revoke api key",
+    "forget api key",
 ]
 
 
@@ -157,6 +177,8 @@ def detect_command(message: str) -> InterviewCommand | None:
     text = stripped.lower()
     if any(keyword in text for keyword in RESTART_KEYWORDS):
         return RestartRequest()
+    if any(keyword in text for keyword in REVOKE_KEY_KEYWORDS):
+        return RevokeKeyRequest()
     if any(keyword in text for keyword in GENERATE_PROFILE_KEYWORDS):
         return GenerateProfileRequest()
     if any(keyword in text for keyword in RETALK_KEYWORDS):
@@ -245,3 +267,9 @@ def format_generate_profile_reply(file_names: list[str]) -> str:
         "這是 pre-alpha snapshot, 不是定稿; 請先由 Maki / operator review 後再使用。\n"
         f"已輸出檔案: {files}"
     )
+
+
+def format_revoke_key_reply(removed: bool) -> str:
+    if removed:
+        return "已刪除這個 LINE 使用者綁定的 Claude API Key。之後若要繼續訪談, 需要重新提供 key。"
+    return "目前沒有找到這個 LINE 使用者已儲存的 Claude API Key。"

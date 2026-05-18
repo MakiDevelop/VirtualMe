@@ -248,6 +248,22 @@ async def test_process_turn_existing_key_runs_extraction_on_interviewee_client(
     assert "user" in roles and "assistant" in roles
 
 
+async def test_process_turn_revoke_key_deletes_stored_key_without_llm(tmp_path, monkeypatch):
+    db = await _new_db(tmp_path)
+    settings = _settings(tmp_path / "keys")
+    byok.store_key(settings.byok_keys_dir, "u1", "sk-ant-existing")
+    interviewee_client = _Claude()
+    monkeypatch.setattr(byok, "build_client", lambda _key: interviewee_client)
+
+    reply = await process_turn("u1", "刪除 API Key", object(), db, _selector(), settings)
+
+    assert "已刪除" in reply
+    assert not byok.has_key(settings.byok_keys_dir, "u1")
+    assert interviewee_client.messages.calls == 0
+    turns = await db.load_session_turns(1)
+    assert [turn.role for turn in turns] == ["user", "assistant"]
+
+
 async def test_byok_disabled_uses_passed_operator_client(tmp_path):
     db = await _new_db(tmp_path)
     settings = Settings(anthropic_api_key=SecretStr("operator-key"), byok_enabled=False)

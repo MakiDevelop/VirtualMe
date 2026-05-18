@@ -13,12 +13,14 @@ from virtualme.interview.commands import (
     GenerateProfileRequest,
     RestartRequest,
     RetalkRequest,
+    RevokeKeyRequest,
     StatusQuery,
     detect_command,
     format_generate_profile_reply,
     format_restart_reply,
     format_retalk_needs_dimension,
     format_retalk_reply,
+    format_revoke_key_reply,
     format_status_reply,
 )
 from virtualme.interview.depth_evaluator import TurnKind, evaluate_depth
@@ -495,7 +497,7 @@ async def _auto_export_if_sufficient(
 
 
 async def _handle_command(
-    command: StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest,
+    command: StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest | RevokeKeyRequest,
     interviewee_id: str,
     incoming_message: str,
     session: Session,
@@ -505,6 +507,14 @@ async def _handle_command(
     settings: Settings,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
+    if isinstance(command, RevokeKeyRequest):
+        scrub_result = scrub_pii(incoming_message)
+        user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+        await db.save_redactions(user_turn.id, scrub_result.redactions)
+        reply = _handle_revoke_key(interviewee_id, settings)
+        await db.save_turn(session.id, "assistant", reply)
+        return reply
+
     if isinstance(command, GenerateProfileRequest):
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
@@ -555,6 +565,13 @@ async def _handle_generate_profile(
         logger.exception("Snapshot export failed for %s: %s", interviewee_id, exc)
         return "人格檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
     return format_generate_profile_reply(sorted(path.name for path in paths))
+
+
+def _handle_revoke_key(interviewee_id: str, settings: Settings) -> str:
+    if not settings.byok_enabled:
+        return "目前沒有啟用 BYOK Claude API Key 儲存。"
+    removed = byok.delete_key(settings.byok_keys_dir, interviewee_id)
+    return format_revoke_key_reply(removed)
 
 
 async def _handle_restart(

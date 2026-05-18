@@ -10,6 +10,7 @@ from virtualme.interview.commands import (
     GenerateProfileRequest,
     RestartRequest,
     RetalkRequest,
+    RevokeKeyRequest,
     StatusQuery,
     detect_command,
 )
@@ -38,6 +39,12 @@ def test_detect_generate_profile_request():
     assert isinstance(detect_command("產生人格檔"), GenerateProfileRequest)
     assert isinstance(detect_command("請幫我匯出人格檔"), GenerateProfileRequest)
     assert isinstance(detect_command("generate profile"), GenerateProfileRequest)
+
+
+def test_detect_revoke_key_request():
+    assert isinstance(detect_command("刪除 API Key"), RevokeKeyRequest)
+    assert isinstance(detect_command("忘記 Claude Key"), RevokeKeyRequest)
+    assert isinstance(detect_command("revoke api key"), RevokeKeyRequest)
 
 
 def test_detect_retalk_with_dimension():
