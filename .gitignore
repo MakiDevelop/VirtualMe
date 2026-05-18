@@ -81,3 +81,7 @@ concept-for-chatgpt-diagram.md
 /tests/unit/test_interview_v2_loader.py
 /tests/unit/test_domain_packs_v2.py
 /docs/TRUNK.md
+
+# === Moat protocol: methodology implementations stay private（含 Version D 腳本 + 個人 PII）===
+/src/virtualme/interview/bait_reaction.py
+/tests/unit/test_bait_reaction.py
