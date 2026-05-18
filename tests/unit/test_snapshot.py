@@ -1,5 +1,6 @@
 from pydantic import ValidationError
 
+from virtualme.snapshot import render_behavior_profile
 from virtualme.snapshot.__main__ import main
 from virtualme.snapshot.core import (
     ConstructCard,
@@ -90,6 +91,7 @@ async def test_snapshot_exports_construct_cards_file(tmp_path):
     paths = await export_snapshot(db, "u1", tmp_path / "exports")
 
     assert {path.name for path in paths} == {
+        "behavior-profile.md",
         "construct-cards.md",
         "SOUL-lite.md",
         "mini-blind-test.md",
@@ -139,6 +141,7 @@ async def test_snapshot_review_ingestion_raises_card_to_plausible(tmp_path):
     summary = (output_dir / "construct-card-review-summary.md").read_text(encoding="utf-8")
 
     assert {path.name for path in paths} == {
+        "behavior-profile.md",
         "construct-cards.md",
         "SOUL-lite.md",
         "mini-blind-test.md",
@@ -152,6 +155,76 @@ async def test_snapshot_review_ingestion_raises_card_to_plausible(tmp_path):
         line for line in cards.splitlines() if line.startswith("- Missing evidence:")
     )
     assert "| C1 | like_me | plausible | behavior_supported | medium_high |" in summary
+
+
+async def test_behavior_profile_renders_construct_card_as_narrative(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    text = render_behavior_profile(bundle)
+
+    assert "# 行為模式檔 v0" in text
+    assert "你描述自己" in text
+    assert "讀完之後" in text
+    assert "這像我嗎" in text
+    assert "Constraint triangle integrity" not in text
+
+
+async def test_behavior_profile_handles_empty_bundle(tmp_path):
+    db = await _new_db(tmp_path)
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    text = render_behavior_profile(bundle)
+
+    assert "訪談資料還不足" in text
+    assert "讀完之後" in text
+
+
+async def test_behavior_profile_included_in_export(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    paths = await export_snapshot(db, "u1", tmp_path / "exports")
+    output_path = tmp_path / "exports" / "u1" / "snapshot" / "behavior-profile.md"
+
+    assert "behavior-profile.md" in {path.name for path in paths}
+    assert output_path.exists()
+    assert "# 行為模式檔 v0" in output_path.read_text(encoding="utf-8")
+
+
+async def test_behavior_profile_falls_back_to_hypotheses(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.VOICE,
+        Layer.PATTERN,
+        "speaks gently in meetings",
+        [1],
+        ["Q1"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    text = render_behavior_profile(bundle)
+
+    assert not bundle.construct_cards
+    assert bundle.hypotheses
+    assert "關於你在訪談裡提到的一件事" in text
+    assert "表達方式" in text
 
 
 async def test_markdown_review_ingestion_parses_persona_profile_style(tmp_path):

@@ -245,9 +245,12 @@ def export_snapshot_bundle(
     out_dir: Path,
     reviews: list[ConstructCardReview] | None = None,
 ) -> list[Path]:
+    from virtualme.snapshot.behavior_profile import render_behavior_profile
+
     target = out_dir / bundle.interviewee_id / "snapshot"
     target.mkdir(parents=True, exist_ok=True)
     files = {
+        "behavior-profile.md": render_behavior_profile(bundle),
         "construct-cards.md": render_construct_cards(bundle),
         "SOUL-lite.md": render_soul_lite(bundle),
         "mini-blind-test.md": render_mini_blind_test(bundle),
