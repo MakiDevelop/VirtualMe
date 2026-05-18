@@ -15,6 +15,7 @@ Known PII categories we do NOT catch:
 - Emoji-fragmented text such as "John 🤖 Smith".
 - Multilingual fragments mixing scripts inside one name.
 - Addresses, schools, hospitals, and team names without company suffixes.
+- Informal company references without a legal suffix (e.g. "台積電公司", "Google company") — only formal legal-suffix names are caught.
 - Social handles, bank accounts, passport numbers, and tax IDs outside Taiwan.
 """
 
@@ -65,11 +66,14 @@ ZH_PERSON_RE = re.compile(
     r"([王李張陳林黃吳劉蔡楊許鄭謝郭洪曾邱廖賴徐周葉蘇莊呂江何蕭羅高潘簡朱鍾游詹沈彭胡余盧][\u4e00-\u9fff]{1,2})"
     r"(?![\u4e00-\u9fff])"
 )
+# Chinese company names only use formal legal suffixes because bare "公司" is a
+# high-frequency generic word; English keeps capitalization as the name signal,
+# so only the suffix is case-insensitive.
 COMPANY_RE = re.compile(
-    r"\b([A-Z][\w&.-]*(?:\s+[A-Z][\w&.-]*){0,3}\s+"
-    r"(?:Inc|Corp|Corporation|LLC|Ltd|Limited|Company))\b"
-    r"|([\u4e00-\u9fff]{2,8}(?:公司|股份有限公司))",
-    re.I,
+    r"\b([A-Z][A-Za-z0-9&.-]*(?:\s+[A-Z][A-Za-z0-9&.-]*){0,3}\s+"
+    r"(?i:Inc\.?|Corp\.?|Corporation|LLC|Ltd\.?|Limited))\b"
+    r"|([A-Za-z0-9&._\-\u4e00-\u9fff]{2,24}"
+    r"(?:股份有限公司|有限責任公司|有限公司))"
 )
 
 
