@@ -78,6 +78,10 @@ async def handle_line_webhook(
 
         event_id = _event_id(event)
         message_id = getattr(event.message, "id", None)
+        if event_id is None:
+            logger.error("LINE text event skipped because stable event id is missing")
+            skipped += 1
+            continue
         if not await db.claim_transport_event(
             event_id,
             "line",
@@ -174,10 +178,11 @@ def _secret_value(secret) -> str | None:
     return secret.get_secret_value() if secret is not None else None
 
 
-def _event_id(event: MessageEvent) -> str:
+def _event_id(event: MessageEvent) -> str | None:
     webhook_event_id = getattr(event, "webhook_event_id", None)
     message_id = getattr(event.message, "id", None)
-    return str(webhook_event_id or message_id or f"line:{id(event)}")
+    event_id = webhook_event_id or message_id
+    return str(event_id) if event_id else None
 
 
 def _enqueue(coro: Awaitable[None], background_tasks: BackgroundTasks | None) -> None:

@@ -236,6 +236,34 @@ async def test_text_event_without_reply_token_skips(monkeypatch):
     assert result == {"status": "ok", "queued": 0, "duplicate": 0, "skipped": 1}
 
 
+async def test_text_event_without_stable_event_id_skips(monkeypatch):
+    body = _line_body()
+    event = line.WebhookParser("secret").parse(body.decode(), _signature(body))[0]
+    object.__setattr__(event, "webhook_event_id", None)
+    object.__setattr__(event.message, "id", None)
+
+    class FakeParser:
+        def __init__(self, secret):
+            self.secret = secret
+
+        def parse(self, body_text, signature):
+            return [event]
+
+    async def fake_process_turn(**kwargs):
+        raise AssertionError("should not call process_turn")
+
+    monkeypatch.setattr(line, "WebhookParser", FakeParser)
+    monkeypatch.setattr(line, "process_turn", fake_process_turn)
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        object(),
+        object(),
+        settings=_settings(),
+    )
+    assert result == {"status": "ok", "queued": 0, "duplicate": 0, "skipped": 1}
+
+
 async def test_duplicate_line_event_is_not_enqueued(monkeypatch):
     body = _line_body()
     background = FakeBackgroundTasks()
