@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,6 +15,9 @@ from virtualme.interview.triples import PersonaTriple
 from virtualme.storage.db import DB, Anchor, Dimension, Layer
 
 SNAPSHOT_SCHEMA_VERSION = "0.1"
+
+ReviewVerdict = Literal["like_me", "unlike_me", "unsure", "missing_context"]
+ReviewEvidenceQuality = Literal["none", "low", "medium", "medium_high", "high"]
 
 CORE_DIMENSIONS = (
     Dimension.SOUL,
@@ -153,6 +158,24 @@ class ConstructCard(BaseModel):
     ] | None = None
 
 
+class ConstructCardReview(BaseModel):
+    card_id: str
+    verdict: ReviewVerdict
+    reviewer: str | None = None
+    reviewed_at: str | None = None
+    notes: str | None = None
+    concrete_case: str | None = None
+    exception_note: str | None = None
+    counterexample_note: str | None = None
+    exact_wording_note: str | None = None
+    pressure_note: str | None = None
+    decision_tradeoff_note: str | None = None
+    evidence_quality: ReviewEvidenceQuality = "none"
+    status_after_review: str | None = None
+    confidence_level: Literal["insufficient", "draft", "plausible", "validated"] | None = None
+    policy_status: Literal["espoused_only", "behavior_supported", "contradicted", "validated"] | None = None
+
+
 class SnapshotBundle(BaseModel):
     schema_version: str = SNAPSHOT_SCHEMA_VERSION
     interviewee_id: str
@@ -202,7 +225,27 @@ def build_snapshot_bundle_from_data(
 
 async def export_snapshot(db: DB, interviewee_id: str, out_dir: Path) -> list[Path]:
     bundle = await build_snapshot_bundle(db, interviewee_id)
-    target = out_dir / interviewee_id / "snapshot"
+    return export_snapshot_bundle(bundle, out_dir)
+
+
+async def export_snapshot_with_review(
+    db: DB,
+    interviewee_id: str,
+    out_dir: Path,
+    review_path: Path,
+) -> list[Path]:
+    bundle = await build_snapshot_bundle(db, interviewee_id)
+    reviews = load_construct_card_reviews(review_path)
+    bundle = apply_construct_card_reviews(bundle, reviews)
+    return export_snapshot_bundle(bundle, out_dir, reviews=reviews)
+
+
+def export_snapshot_bundle(
+    bundle: SnapshotBundle,
+    out_dir: Path,
+    reviews: list[ConstructCardReview] | None = None,
+) -> list[Path]:
+    target = out_dir / bundle.interviewee_id / "snapshot"
     target.mkdir(parents=True, exist_ok=True)
     files = {
         "construct-cards.md": render_construct_cards(bundle),
@@ -210,12 +253,311 @@ async def export_snapshot(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
         "mini-blind-test.md": render_mini_blind_test(bundle),
         "feedback-routing.md": render_feedback_routing(bundle),
     }
+    if reviews is not None:
+        files["construct-card-review-summary.md"] = render_construct_card_review_summary(
+            bundle,
+            reviews,
+        )
     written: list[Path] = []
     for name, content in files.items():
         path = target / name
         path.write_text(content, encoding="utf-8")
         written.append(path)
     return written
+
+
+def load_construct_card_reviews(path: Path) -> list[ConstructCardReview]:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() == ".json":
+        raw = json.loads(text)
+        if isinstance(raw, dict):
+            raw = raw.get("reviews", raw.get("cards", []))
+        return [ConstructCardReview.model_validate(item) for item in raw]
+    return _load_markdown_construct_card_reviews(text)
+
+
+def apply_construct_card_reviews(
+    bundle: SnapshotBundle,
+    reviews: list[ConstructCardReview],
+) -> SnapshotBundle:
+    review_by_card = {review.card_id.upper(): review for review in reviews}
+    cards = [
+        _apply_construct_card_review(card, review_by_card.get(card.id.upper()))
+        for card in bundle.construct_cards
+    ]
+    return bundle.model_copy(update={"construct_cards": cards})
+
+
+def render_construct_card_review_summary(
+    bundle: SnapshotBundle,
+    reviews: list[ConstructCardReview],
+) -> str:
+    review_by_card = {review.card_id.upper(): review for review in reviews}
+    lines = [
+        f"# Construct Card Review Summary: {bundle.interviewee_id}",
+        "",
+        f"- Schema version: {bundle.schema_version}",
+        f"- Generated at: {bundle.generated_at}",
+        "- Status: human review ingestion summary; not a validation certificate",
+        "",
+        "| Card | Verdict | Confidence | Policy status | Evidence quality | Status after review | Remaining missing evidence |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for card in bundle.construct_cards:
+        review = review_by_card.get(card.id.upper())
+        lines.append(
+            f"| {card.id} | {review.verdict if review else 'unreviewed'} | "
+            f"{card.confidence_level} | {card.policy_status} | "
+            f"{review.evidence_quality if review else 'none'} | "
+            f"{review.status_after_review or 'not specified' if review else 'not reviewed'} | "
+            f"{', '.join(card.missing_evidence) or 'none'} |"
+        )
+    lines.extend(["", "Review notes:", ""])
+    for review in reviews:
+        lines.append(f"## {review.card_id}: {review.verdict}")
+        lines.append("")
+        for label, value in _review_note_items(review):
+            lines.append(f"- {label}: {value}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _load_markdown_construct_card_reviews(text: str) -> list[ConstructCardReview]:
+    reviewer = _first_markdown_value(text, "Reviewer")
+    reviewed_at = _first_markdown_value(text, "Date")
+    espoused_only_ids = set()
+    if re.search(r"C5\s+(?:為|is)\s+espoused", text, flags=re.IGNORECASE):
+        espoused_only_ids.add("C5")
+
+    sections = re.split(r"(?m)^\s*###\s+", text)
+    reviews: list[ConstructCardReview] = []
+    for section in sections[1:]:
+        header, _, body = section.partition("\n")
+        match = re.match(r"(C\d+)\b(.*)", header.strip())
+        if match is None:
+            continue
+        card_id = match.group(1).upper()
+        header_tail = match.group(2)
+        confidence = _markdown_confidence(header_tail)
+        verdict = _markdown_verdict(body, confidence)
+        evidence_line = _markdown_evidence_line(body)
+        review = ConstructCardReview(
+            card_id=card_id,
+            verdict=verdict,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+            notes=evidence_line,
+            exception_note=_markdown_category_note(evidence_line, ("exception", "例外", "unless")),
+            counterexample_note=_markdown_category_note(evidence_line, ("counterexample", "反例")),
+            exact_wording_note=_markdown_category_note(
+                evidence_line,
+                ("wording", "實錄", "話術", "quote"),
+            ),
+            pressure_note=_markdown_category_note(evidence_line, ("pressure", "壓力", "高風險")),
+            decision_tradeoff_note=_markdown_category_note(
+                evidence_line,
+                ("tradeoff", "取捨", "選擇題", "問卷"),
+            ),
+            evidence_quality=_markdown_evidence_quality(body),
+            confidence_level=confidence,
+            policy_status="espoused_only" if card_id in espoused_only_ids else None,
+            status_after_review=f"markdown_ingested_{confidence}" if confidence else None,
+        )
+        reviews.append(review)
+    return reviews
+
+
+def _apply_construct_card_review(
+    card: ConstructCard,
+    review: ConstructCardReview | None,
+) -> ConstructCard:
+    if review is None:
+        return card
+
+    confidence_level = _review_confidence_level(card, review)
+    policy_status = _review_policy_status(card, review)
+    missing_evidence = _remaining_missing_evidence(card.missing_evidence, review)
+    confidence_checks = {
+        **card.confidence_checks,
+        "human_reviewed": True,
+        "human_confirmed": review.verdict == "like_me",
+        "review_has_concrete_case": bool(_text_value(review.concrete_case)),
+        "review_has_exception_or_counterexample": bool(
+            _text_value(review.exception_note) or _text_value(review.counterexample_note)
+        ),
+        "review_has_pressure": bool(_text_value(review.pressure_note)),
+    }
+    supporting_evidence = list(card.supporting_evidence)
+    disconfirming_evidence = list(card.disconfirming_evidence)
+    review_evidence = EvidenceItem(
+        kind="human_review",
+        content=_review_evidence_content(review),
+    )
+    if review.verdict == "unlike_me":
+        disconfirming_evidence.append(review_evidence)
+    else:
+        supporting_evidence.append(review_evidence)
+
+    return card.model_copy(
+        update={
+            "confidence_level": confidence_level,
+            "confidence_reason": _review_confidence_reason(card, review, confidence_level),
+            "confidence_checks": confidence_checks,
+            "missing_evidence": missing_evidence,
+            "policy_status": policy_status,
+            "supporting_evidence": supporting_evidence,
+            "disconfirming_evidence": disconfirming_evidence,
+        }
+    )
+
+
+def _review_confidence_level(
+    card: ConstructCard,
+    review: ConstructCardReview,
+) -> Literal["insufficient", "draft", "plausible", "validated"]:
+    if review.verdict == "unlike_me":
+        return "insufficient"
+    if review.verdict in {"unsure", "missing_context"}:
+        return card.confidence_level
+    if review.confidence_level is not None:
+        return "plausible" if review.confidence_level == "validated" else review.confidence_level
+    if review.evidence_quality in {"medium", "medium_high", "high"}:
+        return "plausible"
+    if _text_value(review.concrete_case) and (
+        _text_value(review.pressure_note)
+        or _text_value(review.exception_note)
+        or _text_value(review.counterexample_note)
+    ):
+        return "plausible"
+    return "draft"
+
+
+def _review_policy_status(
+    card: ConstructCard,
+    review: ConstructCardReview,
+) -> Literal["espoused_only", "behavior_supported", "contradicted", "validated"]:
+    if review.verdict == "unlike_me":
+        return "contradicted"
+    if review.policy_status is not None:
+        return "behavior_supported" if review.policy_status == "validated" else review.policy_status
+    if _text_value(review.concrete_case) or review.evidence_quality in {"medium", "medium_high", "high"}:
+        return "behavior_supported"
+    return card.policy_status
+
+
+def _review_confidence_reason(
+    card: ConstructCard,
+    review: ConstructCardReview,
+    confidence_level: str,
+) -> str:
+    parts = [card.confidence_reason, f"human review verdict={review.verdict}"]
+    if review.evidence_quality != "none":
+        parts.append(f"review evidence quality={review.evidence_quality}")
+    if review.status_after_review:
+        parts.append(f"status after review={review.status_after_review}")
+    if confidence_level == "plausible":
+        parts.append("raised by offline review ingestion, not runtime validation")
+    if confidence_level == "draft" and review.verdict == "like_me":
+        parts.append("human-confirmed draft without enough behavioral audit")
+    return "; ".join(part for part in parts if part)
+
+
+def _remaining_missing_evidence(
+    missing_evidence: list[str],
+    review: ConstructCardReview,
+) -> list[str]:
+    resolved = set()
+    if _text_value(review.exception_note):
+        resolved.add("exception")
+    if _text_value(review.counterexample_note):
+        resolved.add("counterexample")
+    if _text_value(review.exact_wording_note):
+        resolved.add("exact_wording")
+    if _text_value(review.pressure_note):
+        resolved.add("pressure")
+    if _text_value(review.decision_tradeoff_note):
+        resolved.add("decision_tradeoff")
+    return [item for item in missing_evidence if item not in resolved]
+
+
+def _review_evidence_content(review: ConstructCardReview) -> str:
+    parts = [f"verdict={review.verdict}", f"evidence_quality={review.evidence_quality}"]
+    if review.reviewer:
+        parts.append(f"reviewer={review.reviewer}")
+    if review.reviewed_at:
+        parts.append(f"reviewed_at={review.reviewed_at}")
+    if review.status_after_review:
+        parts.append(f"status={review.status_after_review}")
+    note_values = [value for _, value in _review_note_items(review)]
+    if note_values:
+        parts.append("notes=" + " | ".join(note_values))
+    return _clean("; ".join(parts))
+
+
+def _review_note_items(review: ConstructCardReview) -> list[tuple[str, str]]:
+    fields = [
+        ("reviewer", review.reviewer),
+        ("reviewed_at", review.reviewed_at),
+        ("status_after_review", review.status_after_review),
+        ("notes", review.notes),
+        ("concrete_case", review.concrete_case),
+        ("exception_note", review.exception_note),
+        ("counterexample_note", review.counterexample_note),
+        ("pressure_note", review.pressure_note),
+        ("exact_wording_note", review.exact_wording_note),
+        ("decision_tradeoff_note", review.decision_tradeoff_note),
+    ]
+    return [(label, _clean(value)) for label, value in fields if _text_value(value)]
+
+
+def _first_markdown_value(text: str, label: str) -> str | None:
+    match = re.search(rf"(?m)^\*\*{re.escape(label)}\*\*\s*:\s*(.+)$", text)
+    if match is None:
+        match = re.search(rf"(?m)^{re.escape(label)}\s*:\s*(.+)$", text)
+    return _clean(match.group(1)) if match else None
+
+
+def _markdown_confidence(header: str) -> Literal["insufficient", "draft", "plausible", "validated"] | None:
+    match = re.search(r"confidence:\s*(insufficient|draft|plausible|validated)", header)
+    return match.group(1) if match else None  # type: ignore[return-value]
+
+
+def _markdown_verdict(
+    body: str,
+    confidence: str | None,
+) -> ReviewVerdict:
+    if re.search(r"\[[VXx✓]\]\s*像我", body):
+        return "like_me"
+    if re.search(r"\[[VXx✓]\]\s*不像我", body):
+        return "unlike_me"
+    if re.search(r"\[[VXx✓]\]\s*不確定", body):
+        return "unsure"
+    if re.search(r"\[[VXx✓]\]\s*缺脈絡", body):
+        return "missing_context"
+    if confidence in {"plausible", "validated"}:
+        return "like_me"
+    return "unsure"
+
+
+def _markdown_evidence_line(body: str) -> str | None:
+    match = re.search(r"(?m)^-\s*證據\s*[\uff1a:]\s*(.+)$", body)
+    return _clean(match.group(1)) if match else None
+
+
+def _markdown_evidence_quality(body: str) -> ReviewEvidenceQuality:
+    if re.search(r"證據\s*[\uff1a:].+", body):
+        return "medium"
+    return "none"
+
+
+def _markdown_category_note(text: str | None, keywords: tuple[str, ...]) -> str | None:
+    if text and _contains_any(text, keywords):
+        return text
+    return None
+
+
+def _text_value(value: str | None) -> bool:
+    return bool(value and value.strip())
 
 
 def render_soul_lite(bundle: SnapshotBundle) -> str:
