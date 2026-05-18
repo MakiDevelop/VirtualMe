@@ -81,13 +81,34 @@ async def _count(db: DB, table: str) -> int:
 async def test_gate_no_key_normal_message_returns_onboarding(tmp_path):
     keys_dir = tmp_path / "keys"
     result = await byok.run_byok_gate("u1", "hello there", str(keys_dir))
+    assert result.reply == byok.CONSENT_REPLY
+    assert result.api_key is None
+    assert not byok.has_consent(str(keys_dir), "u1")
+
+
+async def test_gate_accepts_consent_before_key(tmp_path):
+    keys_dir = tmp_path / "keys"
+
+    result = await byok.run_byok_gate("u1", "同意", str(keys_dir))
+
+    assert result.reply == byok.CONSENT_ACCEPTED_REPLY
+    assert result.api_key is None
+    assert byok.has_consent(str(keys_dir), "u1")
+
+
+async def test_gate_after_consent_prompts_for_key(tmp_path):
+    keys_dir = tmp_path / "keys"
+    byok.store_consent(str(keys_dir), "u1")
+
+    result = await byok.run_byok_gate("u1", "hello there", str(keys_dir))
+
     assert result.reply == byok.ONBOARDING_REPLY
     assert result.api_key is None
-    assert not keys_dir.exists()
 
 
 async def test_gate_invalid_key_is_not_stored(tmp_path, monkeypatch):
     keys_dir = tmp_path / "keys"
+    byok.store_consent(str(keys_dir), "u1")
     calls: list[str] = []
 
     async def fake_validate(key: str) -> bool:
@@ -105,6 +126,7 @@ async def test_gate_invalid_key_is_not_stored(tmp_path, monkeypatch):
 
 async def test_gate_valid_key_stored_with_restrictive_modes(tmp_path, monkeypatch):
     keys_dir = tmp_path / "keys"
+    byok.store_consent(str(keys_dir), "u1")
 
     async def fake_validate(_key: str) -> bool:
         return True
@@ -130,6 +152,7 @@ async def test_gate_existing_key_proceeds(tmp_path):
 
 async def test_gate_never_logs_the_key(tmp_path, monkeypatch, caplog):
     keys_dir = tmp_path / "keys"
+    byok.store_consent(str(keys_dir), "u1")
 
     async def fake_validate(_key: str) -> bool:
         return True
@@ -192,7 +215,23 @@ async def test_process_turn_onboarding_writes_no_turns_no_llm(tmp_path, monkeypa
     monkeypatch.setattr(byok, "build_client", boom)
     reply = await process_turn("u1", "hello", object(), db, _selector(), settings)
 
-    assert reply == byok.ONBOARDING_REPLY
+    assert reply == byok.CONSENT_REPLY
+    assert await _count(db, "turns") == 0
+    assert await _count(db, "sessions") == 0
+
+
+async def test_process_turn_consent_writes_no_turns_no_llm(tmp_path, monkeypatch):
+    db = await _new_db(tmp_path)
+    settings = _settings(tmp_path / "keys")
+
+    def boom(_key):
+        raise AssertionError("LLM client must not be built for consent")
+
+    monkeypatch.setattr(byok, "build_client", boom)
+    reply = await process_turn("u1", "同意", object(), db, _selector(), settings)
+
+    assert reply == byok.CONSENT_ACCEPTED_REPLY
+    assert byok.has_consent(settings.byok_keys_dir, "u1")
     assert await _count(db, "turns") == 0
     assert await _count(db, "sessions") == 0
 
@@ -200,6 +239,7 @@ async def test_process_turn_onboarding_writes_no_turns_no_llm(tmp_path, monkeypa
 async def test_process_turn_invalid_key_writes_no_turns(tmp_path, monkeypatch):
     db = await _new_db(tmp_path)
     settings = _settings(tmp_path / "keys")
+    byok.store_consent(settings.byok_keys_dir, "u1")
 
     async def fake_validate(_key: str) -> bool:
         return False
@@ -215,6 +255,7 @@ async def test_process_turn_invalid_key_writes_no_turns(tmp_path, monkeypatch):
 async def test_process_turn_valid_key_stores_and_writes_no_turns(tmp_path, monkeypatch):
     db = await _new_db(tmp_path)
     settings = _settings(tmp_path / "keys")
+    byok.store_consent(settings.byok_keys_dir, "u1")
 
     async def fake_validate(_key: str) -> bool:
         return True
