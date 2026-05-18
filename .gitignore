@@ -70,3 +70,14 @@ concept-for-chatgpt-diagram.md
 
 # Claude Code local settings (operator-specific MCP refs, not for public)
 .claude/
+
+# === Moat protocol: v2 methodology + internal roadmap, withdrawn 2026-05-18 ===
+/src/virtualme/data/question-pool-v2.yaml
+/src/virtualme/data/domain-packs-v2.yaml
+/specs/09-interview-engine-v2.md
+/docs/research/virtualme-domain-pack-8-fields.md
+/src/virtualme/interview/v2_schema.py
+/src/virtualme/interview/v2_loader.py
+/tests/unit/test_interview_v2_loader.py
+/tests/unit/test_domain_packs_v2.py
+/docs/TRUNK.md
