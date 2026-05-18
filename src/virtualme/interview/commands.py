@@ -259,15 +259,6 @@ def format_restart_reply(archive_note: str, archived_counts: dict[str, int], fir
     )
 
 
-def format_generate_profile_reply(file_names: list[str]) -> str:
-    files = "、".join(file_names)
-    return (
-        "已產生目前的行為模式檔草稿。\n"
-        "這是 pre-alpha snapshot, 不是定稿; 請先由 Maki / operator review 後再使用。\n"
-        f"已輸出檔案: {files}"
-    )
-
-
 def format_generate_profile_denied() -> str:
     return "目前沒有開放 LINE 直接產生行為模式檔; 請由 Maki / operator 協助匯出。"
 

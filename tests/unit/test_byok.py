@@ -82,7 +82,7 @@ async def _count(db: DB, table: str) -> int:
 def test_consent_gate_prompts_before_any_storage(tmp_path):
     keys_dir = tmp_path / "keys"
 
-    reply = byok.run_consent_gate("u1", "hello there", str(keys_dir))
+    reply = byok.run_consent_gate("u1", "hello there", str(keys_dir), byok_enabled=True)
 
     assert reply == byok.CONSENT_REPLY
     assert not byok.has_consent(str(keys_dir), "u1")
@@ -92,7 +92,7 @@ def test_consent_gate_prompts_before_any_storage(tmp_path):
 def test_consent_gate_accepts_exact_consent_with_restrictive_modes(tmp_path):
     keys_dir = tmp_path / "keys"
 
-    reply = byok.run_consent_gate("u1", "同意", str(keys_dir))
+    reply = byok.run_consent_gate("u1", "同意", str(keys_dir), byok_enabled=True)
 
     assert reply == byok.CONSENT_ACCEPTED_REPLY
     assert byok.has_consent(str(keys_dir), "u1")
@@ -107,7 +107,7 @@ def test_consent_gate_existing_consent_allows_turn_to_continue(tmp_path):
     keys_dir = tmp_path / "keys"
     byok.store_consent(str(keys_dir), "u1")
 
-    assert byok.run_consent_gate("u1", "a normal answer", str(keys_dir)) is None
+    assert byok.run_consent_gate("u1", "a normal answer", str(keys_dir), byok_enabled=True) is None
 
 
 async def test_gate_no_key_normal_message_returns_onboarding(tmp_path):
@@ -298,7 +298,7 @@ async def test_process_turn_consent_acceptance_writes_no_turns(tmp_path):
 
     reply = await process_turn("u1", "同意", object(), db, _selector(), settings)
 
-    assert reply == byok.CONSENT_ACCEPTED_REPLY
+    assert reply == byok.CONSENT_ACCEPTED_REPLY_OPERATOR
     assert byok.has_consent(settings.byok_keys_dir, "u1")
     assert await _count(db, "turns") == 0
     assert await _count(db, "sessions") == 0

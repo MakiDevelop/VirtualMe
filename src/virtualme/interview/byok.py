@@ -43,6 +43,8 @@ ONBOARDING_REPLY = (
     "請先提供您的 Claude API Key（sk-ant- 開頭）。"  # noqa: RUF001
 )
 CONSENT_REPLY = (
+    "我是 VirtualMe —— 我會用對話, 一次一題, 慢慢認識你。"
+    "整個過程你隨時可以說「今天先到這」暫停。\n\n"
     "開始前請先確認並回覆「同意」。\n\n"
     "1. 訪談資料會儲存在 Maki 的 VPS 上。\n"
     "2. Maki 不會主動讀取您的訪談內容或行為模式檔; "
@@ -57,6 +59,9 @@ CONSENT_REPLY = (
 )
 CONSENT_ACCEPTED_REPLY = (
     "已記錄同意。接下來請提供您的 Claude API Key (sk-ant- 開頭) 以開始訪談。"
+)
+CONSENT_ACCEPTED_REPLY_OPERATOR = (
+    "已記錄同意。我們現在就開始 —— 先跟我說說, 你最近的工作或生活, 過得怎麼樣?"
 )
 KEY_ACCEPTED_REPLY = "API Key 驗證成功，開始訪談。請說說您最近的工作狀況。"  # noqa: RUF001
 KEY_INVALID_REPLY = "API Key 無效，請重新提供。"  # noqa: RUF001
@@ -169,7 +174,12 @@ async def validate_api_key(api_key: str) -> bool:
     return True
 
 
-def run_consent_gate(interviewee_id: str, incoming_message: str, keys_dir: str) -> str | None:
+def run_consent_gate(
+    interviewee_id: str,
+    incoming_message: str,
+    keys_dir: str,
+    byok_enabled: bool,
+) -> str | None:
     """Require data-use consent before any session/turn/LLM work.
 
     Consent is intentionally independent from BYOK: operator-key deployments
@@ -180,7 +190,9 @@ def run_consent_gate(interviewee_id: str, incoming_message: str, keys_dir: str) 
     if incoming_message.strip() == CONSENT_TEXT:
         store_consent(keys_dir, interviewee_id)
         logger.info("Consent gate: consent accepted for %s", interviewee_id)
-        return CONSENT_ACCEPTED_REPLY
+        if byok_enabled:
+            return CONSENT_ACCEPTED_REPLY
+        return CONSENT_ACCEPTED_REPLY_OPERATOR
     logger.info("Consent gate: consent prompt sent to %s", interviewee_id)
     return CONSENT_REPLY
 
