@@ -98,6 +98,18 @@ async def test_snapshot_exports_construct_cards_file(tmp_path):
     assert all(path.exists() for path in paths)
 
 
+async def test_snapshot_export_rejects_path_traversal_interviewee_id(tmp_path):
+    db = await _new_db(tmp_path)
+
+    for bad_id in ["../x", "nested/x", "nested\\x", "bad\nid", "bad..id"]:
+        try:
+            await export_snapshot(db, bad_id, tmp_path / "exports")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted unsafe interviewee_id: {bad_id!r}")
+
+
 async def test_snapshot_review_ingestion_raises_card_to_plausible(tmp_path):
     db = await _new_db(tmp_path)
     await db.save_anchor(

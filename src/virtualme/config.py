@@ -65,6 +65,10 @@ class Settings(BaseSettings):
         "./data/personas",
         validation_alias=AliasChoices("persona_export_dir", "VIRTUALME_PERSONA_EXPORT_DIR"),
     )
+    snapshot_export_dir: str = Field(
+        "./exports",
+        validation_alias=AliasChoices("snapshot_export_dir", "VIRTUALME_SNAPSHOT_EXPORT_DIR"),
+    )
 
 
 def sqlite_path(database_url: str) -> str:

@@ -6,7 +6,13 @@ from pydantic import SecretStr
 
 from virtualme.config import Settings
 from virtualme.interview.bot import process_turn
-from virtualme.interview.commands import RestartRequest, RetalkRequest, StatusQuery, detect_command
+from virtualme.interview.commands import (
+    GenerateProfileRequest,
+    RestartRequest,
+    RetalkRequest,
+    StatusQuery,
+    detect_command,
+)
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.storage.db import DB, Dimension, Layer, Question
 
@@ -26,6 +32,12 @@ def test_detect_status_query():
 def test_detect_restart_request():
     assert isinstance(detect_command("重頭開始萃取"), RestartRequest)
     assert isinstance(detect_command("從頭開始"), RestartRequest)
+
+
+def test_detect_generate_profile_request():
+    assert isinstance(detect_command("產生人格檔"), GenerateProfileRequest)
+    assert isinstance(detect_command("請幫我匯出人格檔"), GenerateProfileRequest)
+    assert isinstance(detect_command("generate profile"), GenerateProfileRequest)
 
 
 def test_detect_retalk_with_dimension():
@@ -50,6 +62,9 @@ def test_long_answer_with_keyword_is_not_a_command():
     long_answer = "重談 " + "這是一段很長的訪談回答內容描述當時的情境與感受" * 3
     assert len(long_answer) > 40
     assert detect_command(long_answer) is None
+    long_profile_answer = "產生人格檔 " + "但這其實是在描述我以前怎麼看待人格檔這件事" * 3
+    assert len(long_profile_answer) > 40
+    assert detect_command(long_profile_answer) is None
 
 
 # --- process_turn integration ------------------------------------------------
@@ -103,6 +118,37 @@ async def test_process_turn_status_query_reports_completion_progress(tmp_path):
     assert "語氣・表達: 33%" in reply
     assert "界線・原則: 100%" in reply
     assert "目前最缺" in reply
+
+
+async def test_process_turn_generate_profile_exports_snapshot_without_extraction(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(
+        anthropic_api_key=SecretStr("k"),
+        snapshot_export_dir=str(tmp_path / "snapshots"),
+    )
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    reply = await process_turn("u1", "產生人格檔", object(), db, selector, settings)
+
+    snapshot_dir = tmp_path / "snapshots" / "u1" / "snapshot"
+    assert "已產生目前的人格檔草稿" in reply
+    assert "construct-cards.md" in reply
+    assert (snapshot_dir / "construct-cards.md").is_file()
+    assert (snapshot_dir / "SOUL-lite.md").is_file()
+    turns = await db.load_session_turns(1)
+    assert [turn.role for turn in turns] == ["user", "assistant"]
+    anchors = await db.load_anchors_summary("u1")
+    assert len(anchors[Dimension.SKILL]) == 1
 
 
 async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_path):

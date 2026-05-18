@@ -224,6 +224,7 @@ def build_snapshot_bundle_from_data(
 
 
 async def export_snapshot(db: DB, interviewee_id: str, out_dir: Path) -> list[Path]:
+    _validate_interviewee_id(interviewee_id)
     bundle = await build_snapshot_bundle(db, interviewee_id)
     return export_snapshot_bundle(bundle, out_dir)
 
@@ -234,6 +235,7 @@ async def export_snapshot_with_review(
     out_dir: Path,
     review_path: Path,
 ) -> list[Path]:
+    _validate_interviewee_id(interviewee_id)
     bundle = await build_snapshot_bundle(db, interviewee_id)
     reviews = load_construct_card_reviews(review_path)
     bundle = apply_construct_card_reviews(bundle, reviews)
@@ -245,6 +247,7 @@ def export_snapshot_bundle(
     out_dir: Path,
     reviews: list[ConstructCardReview] | None = None,
 ) -> list[Path]:
+    _validate_interviewee_id(bundle.interviewee_id)
     target = out_dir / bundle.interviewee_id / "snapshot"
     target.mkdir(parents=True, exist_ok=True)
     files = {
@@ -558,6 +561,17 @@ def _markdown_category_note(text: str | None, keywords: tuple[str, ...]) -> str 
 
 def _text_value(value: str | None) -> bool:
     return bool(value and value.strip())
+
+
+def _validate_interviewee_id(interviewee_id: str) -> None:
+    if (
+        not interviewee_id
+        or ".." in interviewee_id
+        or "/" in interviewee_id
+        or "\\" in interviewee_id
+        or any(ord(char) < 32 for char in interviewee_id)
+    ):
+        raise ValueError("Invalid interviewee_id for snapshot export")
 
 
 def render_soul_lite(bundle: SnapshotBundle) -> str:

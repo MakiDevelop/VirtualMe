@@ -119,7 +119,27 @@ class RestartRequest:
     """User asked to restart the whole extraction run."""
 
 
-InterviewCommand = StatusQuery | RetalkRequest | RestartRequest
+@dataclass
+class GenerateProfileRequest:
+    """User asked to export the current snapshot/persona draft."""
+
+
+InterviewCommand = StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest
+
+
+GENERATE_PROFILE_KEYWORDS = [
+    "產生人格檔",
+    "生成人格檔",
+    "匯出人格檔",
+    "輸出人格檔",
+    "產出人格檔",
+    "建立人格檔",
+    "產生 persona",
+    "生成 persona",
+    "export persona",
+    "generate profile",
+    "export profile",
+]
 
 
 def _match_dimension(text: str) -> Dimension | None:
@@ -137,6 +157,8 @@ def detect_command(message: str) -> InterviewCommand | None:
     text = stripped.lower()
     if any(keyword in text for keyword in RESTART_KEYWORDS):
         return RestartRequest()
+    if any(keyword in text for keyword in GENERATE_PROFILE_KEYWORDS):
+        return GenerateProfileRequest()
     if any(keyword in text for keyword in RETALK_KEYWORDS):
         return RetalkRequest(dimension=_match_dimension(text))
     if any(keyword in text for keyword in STATUS_KEYWORDS):
@@ -213,4 +235,13 @@ def format_restart_reply(archive_note: str, archived_counts: dict[str, int], fir
         f"封存摘要: anchors {archived_counts['anchors']}, "
         f"triples {archived_counts['triples']}, sessions {archived_counts['sessions']}。\n"
         f"{first_question}"
+    )
+
+
+def format_generate_profile_reply(file_names: list[str]) -> str:
+    files = "、".join(file_names)
+    return (
+        "已產生目前的人格檔草稿。\n"
+        "這是 pre-alpha snapshot, 不是定稿; 請先由 Maki / operator review 後再使用。\n"
+        f"已輸出檔案: {files}"
     )
