@@ -440,8 +440,13 @@ async def _handle_light_greeting(
     last_asked = await db.get_last_assistant_content(session.id)
     if last_asked:
         is_restart_resume = _is_restart_reply(last_asked)
+        raw_last_asked = last_asked
         last_asked = _clean_resume_question(last_asked)
-        if is_restart_resume or _has_unresolved_placeholder(last_asked):
+        if (
+            is_restart_resume
+            or _is_control_message(raw_last_asked)
+            or _has_unresolved_placeholder(last_asked)
+        ):
             rendered_question = await _final_reply(interviewee_id, question, active_client, db)
             reply = (
                 f"{progress_prefix}\n"
@@ -477,11 +482,32 @@ def _clean_resume_question(content: str) -> str:
         return cleaned.split("\n", 1)[-1].strip()
     if cleaned.startswith("我們先回到剛才這題。"):
         return cleaned.split("\n", 1)[-1].strip()
+    if cleaned.startswith("這題如果不好說"):
+        return cleaned.split("\n", 1)[-1].strip()
     return cleaned
 
 
 def _is_restart_reply(content: str) -> bool:
     return content.strip().startswith("好, 我會從頭開始萃取。")
+
+
+def _is_control_message(content: str) -> bool:
+    cleaned = content.strip()
+    exact_control_messages = {
+        _pause_current_question(),
+        "好，今天先到這裡。我會把這段先整理起來。",  # noqa: RUF001
+        INTERVIEW_ERROR_REPLY,
+        format_retalk_needs_dimension(),
+        format_generate_profile_denied(),
+        "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。",
+    }
+    if cleaned in exact_control_messages:
+        return True
+    return (
+        _is_restart_reply(cleaned)
+        or cleaned.startswith("我們現在正在收集的人格維度是【")
+        or cleaned.startswith("行為模式檔 v0")
+    )
 
 
 def _has_unresolved_placeholder(content: str) -> bool:
@@ -713,11 +739,11 @@ async def _resolve_current_question(
 ) -> Question:
     base = await _current_pool_question(db, selector, session_id, week)
     last_asked = await db.get_last_assistant_content(session_id)
-    if last_asked:
+    if last_asked and not _is_control_message(last_asked):
         # The previous bot turn is what the current answer actually responds to
         # (a pool question OR a generated follow-up). Keep the pool question id
         # for triangulation; reflect the real wording for depth/anchor context.
-        return base.model_copy(update={"text": last_asked})
+        return base.model_copy(update={"text": _clean_resume_question(last_asked)})
     return base
 
 
