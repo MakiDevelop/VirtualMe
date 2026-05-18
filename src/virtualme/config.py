@@ -53,6 +53,10 @@ class Settings(BaseSettings):
         False,
         validation_alias=AliasChoices("byok_enabled", "VIRTUALME_BYOK_ENABLED"),
     )
+    consent_required: bool = Field(
+        True,
+        validation_alias=AliasChoices("consent_required", "VIRTUALME_CONSENT_REQUIRED"),
+    )
     byok_keys_dir: str = Field(
         "./data/keys",
         validation_alias=AliasChoices("byok_keys_dir", "VIRTUALME_BYOK_KEYS_DIR"),
