@@ -15,6 +15,30 @@ class FollowUpRule(StrEnum):
     R5_REPEAT_TO_TRIANGULATE = "R5"
 
 
+FOLLOW_UP_RULE_PROMPTS = {
+    FollowUpRule.R1_FACT_TO_PATTERN: (
+        "The answer gives a concrete fact or event. Ask what recurring pattern, "
+        "trigger, or repeated experience this points to."
+    ),
+    FollowUpRule.R2_PATTERN_TO_PRINCIPLE: (
+        "The answer describes a pattern or preference. Ask what value, need, "
+        "boundary, or tradeoff is underneath it."
+    ),
+    FollowUpRule.R3_PRINCIPLE_TO_COUNTEREXAMPLE: (
+        "The answer states a broad principle. Ask for an exception, limit, "
+        "or situation where they would choose differently."
+    ),
+    FollowUpRule.R4_ABSTRACT_TO_CONCRETE: (
+        "The answer is abstract or generalized. Ask for one concrete recent "
+        "moment, behavior, or decision that shows it."
+    ),
+    FollowUpRule.R5_REPEAT_TO_TRIANGULATE: (
+        "The answer repeats a known theme. Ask from a new angle: pressure, "
+        "cost, contrast, trigger, or what would change it."
+    ),
+}
+
+
 ABSTRACT_MARKERS = {
     "honesty",
     "trust",
@@ -61,12 +85,32 @@ async def generate_follow_up(
 ) -> str:
     if rule == FollowUpRule.R5_REPEAT_TO_TRIANGULATE:
         return "這個原則我想我們已經談得夠清楚了。讓我換個角度問。"
+    rule_instruction = FOLLOW_UP_RULE_PROMPTS[rule]
     prompt = f"""
-Generate one short therapist-style follow-up question for rule {rule.value}.
+Generate one short follow-up question.
+
+Rule: {rule.value}
+Rule instruction: {rule_instruction}
+
 Original question: {original_question}
 Answer: {answer}
+
+Before writing the question, silently identify the answer's most important anchor.
+Priority order:
+1. explicit strong emotion or distress
+2. meaning, self-worth, belonging, or feeling unseen
+3. decision pressure, urge, boundary, or action tendency
+4. concrete event, relationship, or repeated pattern
+5. wording style
+
+Use the user's meaningful content words when helpful.
+Do not focus on hedge or filler words such as 「有點」「好像」「可能」「大概」「其實」「就是」 unless the hedge itself is clearly the main point.
+Do not ask what a hedge word "means" or what is "behind" a hedge word.
+Ask about the substantive or emotional core of the answer.
+
 {INTERVIEW_OUTPUT_LANGUAGE}
-Keep their wording. Do not advise, praise, or explain.
+Return only one short question.
+Do not advise, praise, diagnose, explain, or summarize.
 """
     response = await create_message(
         claude,
