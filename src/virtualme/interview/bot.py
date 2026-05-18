@@ -17,7 +17,6 @@ from virtualme.interview.commands import (
     StatusQuery,
     detect_command,
     format_generate_profile_denied,
-    format_generate_profile_reply,
     format_restart_reply,
     format_retalk_needs_dimension,
     format_retalk_reply,
@@ -77,6 +76,7 @@ async def process_turn(
             interviewee_id,
             incoming_message,
             settings.byok_keys_dir,
+            settings.byok_enabled,
         )
         if consent_reply is not None:
             return consent_reply
@@ -580,7 +580,33 @@ async def _handle_generate_profile(
     except Exception as exc:
         logger.exception("Snapshot export failed for %s: %s", interviewee_id, exc)
         return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
-    return format_generate_profile_reply(sorted(path.name for path in paths))
+    behavior_profile = next((path for path in paths if path.name == "behavior-profile.md"), None)
+    if behavior_profile is None:
+        logger.error("Snapshot export for %s did not include behavior-profile.md", interviewee_id)
+        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
+    return _behavior_profile_for_line(behavior_profile.read_text(encoding="utf-8"))
+
+
+def _behavior_profile_for_line(markdown: str) -> str:
+    lines = []
+    for line in markdown.splitlines():
+        heading_marks = len(line) - len(line.lstrip("#"))
+        if 1 <= heading_marks <= 6 and len(line) > heading_marks and line[heading_marks] == " ":
+            line = line[heading_marks + 1 :]
+        if line.startswith("> "):
+            line = line[2:]
+        elif line.startswith(">"):
+            line = line[1:]
+        if (
+            len(line) >= 2
+            and line.startswith("_")
+            and line.endswith("_")
+            and not line.startswith("__")
+            and not line.endswith("__")
+        ):
+            line = line[1:-1]
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _line_snapshot_export_allowed(interviewee_id: str, settings: Settings) -> bool:

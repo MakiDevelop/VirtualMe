@@ -5,6 +5,7 @@ import json
 from pydantic import SecretStr
 
 from virtualme.config import Settings
+from virtualme.interview import byok
 from virtualme.interview.bot import process_turn
 from virtualme.interview.commands import (
     GenerateProfileRequest,
@@ -186,8 +187,10 @@ async def test_process_turn_generate_profile_exports_for_allowed_user_without_ex
     reply = await process_turn("u1", "產生人格檔", object(), db, selector, settings)
 
     snapshot_dir = tmp_path / "snapshots" / "u1" / "snapshot"
-    assert "已產生目前的行為模式檔草稿" in reply
-    assert "construct-cards.md" in reply
+    assert "行為模式檔 v0" in reply
+    assert "讀完之後" in reply
+    assert "construct-cards" not in reply
+    assert "###" not in reply
     assert (snapshot_dir / "construct-cards.md").is_file()
     assert (snapshot_dir / "SOUL-lite.md").is_file()
     turns = await db.load_session_turns(1)
@@ -210,8 +213,30 @@ async def test_process_turn_generate_profile_owner_is_allowed_when_flag_enabled(
 
     reply = await process_turn("owner-user", "export profile", object(), db, selector, settings)
 
-    assert "已產生目前的行為模式檔草稿" in reply
+    assert "行為模式檔 v0" in reply
+    assert "讀完之後" in reply
+    assert "construct-cards" not in reply
+    assert "###" not in reply
     assert (tmp_path / "snapshots" / "owner-user" / "snapshot" / "SOUL-lite.md").is_file()
+
+
+def test_consent_accepted_reply_operator_mode_omits_api_key(tmp_path):
+    byok_keys_dir = tmp_path / "byok-keys"
+    operator_keys_dir = tmp_path / "operator-keys"
+
+    byok_reply = byok.run_consent_gate("byok-user", "同意", str(byok_keys_dir), byok_enabled=True)
+    operator_reply = byok.run_consent_gate(
+        "operator-user",
+        "同意",
+        str(operator_keys_dir),
+        byok_enabled=False,
+    )
+
+    assert byok_reply is not None
+    assert "API Key" in byok_reply
+    assert operator_reply is not None
+    assert "API Key" not in operator_reply
+    assert "我們現在就開始" in operator_reply
 
 
 async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_path):
