@@ -11,11 +11,13 @@ from virtualme.interview.commands import (
     DIMENSION_LABELS,
     RestartRequest,
     RetalkRequest,
+    RevokeKeyRequest,
     StatusQuery,
     detect_command,
     format_restart_reply,
     format_retalk_needs_dimension,
     format_retalk_reply,
+    format_revoke_key_reply,
     format_status_reply,
 )
 from virtualme.interview.depth_evaluator import TurnKind, evaluate_depth
@@ -60,6 +62,19 @@ async def process_turn(
 ) -> str:
     settings = settings or Settings()
     active_client = claude
+    pre_gate_command = detect_command(incoming_message)
+    if isinstance(pre_gate_command, RevokeKeyRequest):
+        # Revocation is allowed before consent/BYOK so users can always remove
+        # a stored key without first accepting more data processing terms.
+        return _handle_revoke_key(interviewee_id, settings)
+    if settings.consent_required:
+        consent_reply = byok.run_consent_gate(
+            interviewee_id,
+            incoming_message,
+            settings.byok_keys_dir,
+        )
+        if consent_reply is not None:
+            return consent_reply
     if settings.byok_enabled:
         # BYOK gate runs before session/scrub/save_turn/any LLM call.
         gate = await byok.run_byok_gate(interviewee_id, incoming_message, settings.byok_keys_dir)
@@ -81,7 +96,7 @@ async def process_turn(
         else await db.get_current_week(interviewee_id, max_week)
     )
     session = await db.get_or_create_session(interviewee_id, week=week)
-    command = detect_command(incoming_message)
+    command = pre_gate_command
     if is_session_closing(incoming_message):
         return await _close_session(
             interviewee_id,
@@ -491,7 +506,7 @@ async def _auto_export_if_sufficient(
 
 
 async def _handle_command(
-    command: StatusQuery | RetalkRequest | RestartRequest,
+    command: StatusQuery | RetalkRequest | RestartRequest | RevokeKeyRequest,
     interviewee_id: str,
     incoming_message: str,
     session: Session,
@@ -501,6 +516,14 @@ async def _handle_command(
     settings: Settings,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
+    if isinstance(command, RevokeKeyRequest):
+        scrub_result = scrub_pii(incoming_message)
+        user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+        await db.save_redactions(user_turn.id, scrub_result.redactions)
+        reply = _handle_revoke_key(interviewee_id, settings)
+        await db.save_turn(session.id, "assistant", reply)
+        return reply
+
     if isinstance(command, RestartRequest):
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
@@ -530,6 +553,11 @@ async def _handle_command(
     await db.save_redactions(user_turn.id, scrub_result.redactions)
     await db.save_turn(session.id, "assistant", reply)
     return reply
+
+
+def _handle_revoke_key(interviewee_id: str, settings: Settings) -> str:
+    removed = byok.delete_key(settings.byok_keys_dir, interviewee_id)
+    return format_revoke_key_reply(removed)
 
 
 async def _handle_restart(

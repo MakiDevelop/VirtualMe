@@ -6,7 +6,13 @@ from pydantic import SecretStr
 
 from virtualme.config import Settings
 from virtualme.interview.bot import process_turn
-from virtualme.interview.commands import RestartRequest, RetalkRequest, StatusQuery, detect_command
+from virtualme.interview.commands import (
+    RestartRequest,
+    RetalkRequest,
+    RevokeKeyRequest,
+    StatusQuery,
+    detect_command,
+)
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.storage.db import DB, Dimension, Layer, Question
 
@@ -26,6 +32,12 @@ def test_detect_status_query():
 def test_detect_restart_request():
     assert isinstance(detect_command("重頭開始萃取"), RestartRequest)
     assert isinstance(detect_command("從頭開始"), RestartRequest)
+
+
+def test_detect_revoke_key_request():
+    assert isinstance(detect_command("刪除 API Key"), RevokeKeyRequest)
+    assert isinstance(detect_command("忘記 Claude Key"), RevokeKeyRequest)
+    assert isinstance(detect_command("revoke api key"), RevokeKeyRequest)
 
 
 def test_detect_retalk_with_dimension():
