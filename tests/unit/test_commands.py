@@ -7,6 +7,7 @@ from pydantic import SecretStr
 from virtualme.config import Settings
 from virtualme.interview.bot import process_turn
 from virtualme.interview.commands import (
+    GenerateProfileRequest,
     RestartRequest,
     RetalkRequest,
     RevokeKeyRequest,
@@ -40,6 +41,12 @@ def test_detect_revoke_key_request():
     assert isinstance(detect_command("revoke api key"), RevokeKeyRequest)
 
 
+def test_detect_generate_profile_request():
+    assert isinstance(detect_command("產生人格檔"), GenerateProfileRequest)
+    assert isinstance(detect_command("請幫我匯出人格檔"), GenerateProfileRequest)
+    assert isinstance(detect_command("generate profile"), GenerateProfileRequest)
+
+
 def test_detect_retalk_with_dimension():
     command = detect_command("我想重談人際關係")
     assert isinstance(command, RetalkRequest)
@@ -62,6 +69,9 @@ def test_long_answer_with_keyword_is_not_a_command():
     long_answer = "重談 " + "這是一段很長的訪談回答內容描述當時的情境與感受" * 3
     assert len(long_answer) > 40
     assert detect_command(long_answer) is None
+    long_profile_answer = "產生人格檔 " + "但這其實是在描述我以前怎麼看待人格檔這件事" * 3
+    assert len(long_profile_answer) > 40
+    assert detect_command(long_profile_answer) is None
 
 
 # --- process_turn integration ------------------------------------------------
@@ -115,6 +125,93 @@ async def test_process_turn_status_query_reports_completion_progress(tmp_path):
     assert "語氣・表達: 33%" in reply
     assert "界線・原則: 100%" in reply
     assert "目前最缺" in reply
+
+
+async def test_process_turn_generate_profile_denied_by_default(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(
+        anthropic_api_key=SecretStr("k"),
+        snapshot_export_dir=str(tmp_path / "snapshots"),
+    )
+
+    reply = await process_turn("u1", "產生人格檔", object(), db, selector, settings)
+
+    assert "沒有開放 LINE 直接產生行為模式檔" in reply
+    assert not (tmp_path / "snapshots").exists()
+    turns = await db.load_session_turns(1)
+    assert [turn.role for turn in turns] == ["user", "assistant"]
+
+
+async def test_process_turn_generate_profile_denied_when_user_not_allowed(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(
+        anthropic_api_key=SecretStr("k"),
+        line_snapshot_export_enabled=True,
+        line_snapshot_export_user_ids="owner,friend2",
+        snapshot_export_dir=str(tmp_path / "snapshots"),
+    )
+
+    reply = await process_turn("friend1", "generate profile", object(), db, selector, settings)
+
+    assert "沒有開放 LINE 直接產生行為模式檔" in reply
+    assert not (tmp_path / "snapshots").exists()
+
+
+async def test_process_turn_generate_profile_exports_for_allowed_user_without_extraction(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(
+        anthropic_api_key=SecretStr("k"),
+        line_snapshot_export_enabled=True,
+        line_snapshot_export_user_ids="u1",
+        snapshot_export_dir=str(tmp_path / "snapshots"),
+    )
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    reply = await process_turn("u1", "產生人格檔", object(), db, selector, settings)
+
+    snapshot_dir = tmp_path / "snapshots" / "u1" / "snapshot"
+    assert "已產生目前的行為模式檔草稿" in reply
+    assert "construct-cards.md" in reply
+    assert (snapshot_dir / "construct-cards.md").is_file()
+    assert (snapshot_dir / "SOUL-lite.md").is_file()
+    turns = await db.load_session_turns(1)
+    assert [turn.role for turn in turns] == ["user", "assistant"]
+    anchors = await db.load_anchors_summary("u1")
+    assert len(anchors[Dimension.SKILL]) == 1
+
+
+async def test_process_turn_generate_profile_owner_is_allowed_when_flag_enabled(tmp_path):
+    db = await _new_db(tmp_path)
+    selector = QuestionSelector(
+        {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
+    )
+    settings = Settings(
+        anthropic_api_key=SecretStr("k"),
+        line_snapshot_export_enabled=True,
+        owner_line_user_id="owner-user",
+        snapshot_export_dir=str(tmp_path / "snapshots"),
+    )
+
+    reply = await process_turn("owner-user", "export profile", object(), db, selector, settings)
+
+    assert "已產生目前的行為模式檔草稿" in reply
+    assert (tmp_path / "snapshots" / "owner-user" / "snapshot" / "SOUL-lite.md").is_file()
 
 
 async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_path):

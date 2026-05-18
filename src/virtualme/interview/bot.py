@@ -1,5 +1,6 @@
 import logging
 import unicodedata
+from pathlib import Path
 
 from anthropic import AsyncAnthropic
 
@@ -9,11 +10,14 @@ from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
 from virtualme.interview.commands import (
     DIMENSION_LABELS,
+    GenerateProfileRequest,
     RestartRequest,
     RetalkRequest,
     RevokeKeyRequest,
     StatusQuery,
     detect_command,
+    format_generate_profile_denied,
+    format_generate_profile_reply,
     format_restart_reply,
     format_retalk_needs_dimension,
     format_retalk_reply,
@@ -31,6 +35,7 @@ from virtualme.interview.session_lifecycle import (
     is_persona_sufficient,
     is_session_closing,
 )
+from virtualme.snapshot.core import export_snapshot
 from virtualme.storage.db import DB, Dimension, Question, Session
 from virtualme.subject import score_completeness
 
@@ -506,7 +511,7 @@ async def _auto_export_if_sufficient(
 
 
 async def _handle_command(
-    command: StatusQuery | RetalkRequest | RestartRequest | RevokeKeyRequest,
+    command: StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest | RevokeKeyRequest,
     interviewee_id: str,
     incoming_message: str,
     session: Session,
@@ -516,6 +521,14 @@ async def _handle_command(
     settings: Settings,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
+    if isinstance(command, GenerateProfileRequest):
+        scrub_result = scrub_pii(incoming_message)
+        user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+        await db.save_redactions(user_turn.id, scrub_result.redactions)
+        reply = await _handle_generate_profile(interviewee_id, db, settings)
+        await db.save_turn(session.id, "assistant", reply)
+        return reply
+
     if isinstance(command, RevokeKeyRequest):
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
@@ -553,6 +566,34 @@ async def _handle_command(
     await db.save_redactions(user_turn.id, scrub_result.redactions)
     await db.save_turn(session.id, "assistant", reply)
     return reply
+
+
+async def _handle_generate_profile(
+    interviewee_id: str,
+    db: DB,
+    settings: Settings,
+) -> str:
+    if not _line_snapshot_export_allowed(interviewee_id, settings):
+        return format_generate_profile_denied()
+    try:
+        paths = await export_snapshot(db, interviewee_id, Path(settings.snapshot_export_dir))
+    except Exception as exc:
+        logger.exception("Snapshot export failed for %s: %s", interviewee_id, exc)
+        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
+    return format_generate_profile_reply(sorted(path.name for path in paths))
+
+
+def _line_snapshot_export_allowed(interviewee_id: str, settings: Settings) -> bool:
+    if not settings.line_snapshot_export_enabled:
+        return False
+    allowed = {
+        item.strip()
+        for item in settings.line_snapshot_export_user_ids.split(",")
+        if item.strip()
+    }
+    if settings.owner_line_user_id:
+        allowed.add(settings.owner_line_user_id)
+    return interviewee_id in allowed
 
 
 def _handle_revoke_key(interviewee_id: str, settings: Settings) -> str:
