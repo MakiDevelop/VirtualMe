@@ -321,6 +321,12 @@ async def _handle_non_answer(
         interviewee_id, current_question.id, session.week
     )
     if not is_meta:
+        # EVASION: 第一次給溫和 bridge(認可難度、給空間), 連續才 pause。
+        # 分類器必有誤判, runtime 不該讓一次 EVASION 判斷就停題。
+        if count < 2:
+            return await _gentle_evasion_bridge(
+                interviewee_id, current_question, active_client, db
+            )
         return _pause_current_question()
     if count < 2:
         return await _bridge_to_current_question(
@@ -364,6 +370,13 @@ async def _bridge_to_current_question(
         prefix = "可以，我先記下這點。"  # noqa: RUF001
     asked = await _final_reply(interviewee_id, question, claude, db)
     return f"{prefix}我們回到剛才這題。\n{asked}"
+
+
+async def _gentle_evasion_bridge(
+    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+) -> str:
+    asked = await _final_reply(interviewee_id, question, claude, db)
+    return f"這題如果不好說, 可以慢慢來 —— 挑一個你想到的小片段講就好。\n{asked}"
 
 
 def _pause_current_question() -> str:

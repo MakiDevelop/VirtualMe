@@ -22,13 +22,18 @@ class _Claude:
         self.messages = _Messages(text)
 
 
-def _assessment(kind: str = "SUFFICIENT", depth: str = "principle", follow_up: bool = False) -> str:
+def _assessment(
+    kind: str = "SUFFICIENT",
+    depth: str = "principle",
+    follow_up: bool = False,
+    confidence: float = 0.9,
+) -> str:
     return json.dumps(
         {
             "kind": kind,
             "depth": depth,
             "needs_follow_up": follow_up,
-            "confidence": 0.9,
+            "confidence": confidence,
         }
     )
 
@@ -74,3 +79,25 @@ async def test_depth_accepts_markdown_fenced_json():
     assert assessment.kind == TurnKind.SUFFICIENT
     assert assessment.depth == Layer.PRINCIPLE
     assert assessment.parse_failed is False
+
+
+async def test_low_confidence_evasion_downgrades_to_thin_follow_up():
+    assessment = await evaluate_depth(
+        "我有點迷惑, 有時我會覺得我的工作有價值嗎?",
+        "請說說您最近的工作狀況。",
+        _Claude(_assessment(kind="EVASION", confidence=0.5)),
+    )
+
+    assert assessment.kind == TurnKind.THIN
+    assert assessment.needs_follow_up is True
+
+
+async def test_high_confidence_evasion_stays_evasion():
+    assessment = await evaluate_depth(
+        "跳過這題, 我想換一個。",
+        "請說說您最近的工作狀況。",
+        _Claude(_assessment(kind="EVASION", confidence=0.9)),
+    )
+
+    assert assessment.kind == TurnKind.EVASION
+    assert assessment.needs_follow_up is False

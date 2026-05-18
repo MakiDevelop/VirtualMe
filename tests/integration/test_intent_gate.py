@@ -213,7 +213,7 @@ async def test_thin_answer_can_probe_without_extracting_anchor(tmp_path):
     assert await _anchor_count(db) == 0
 
 
-async def test_consecutive_evasion_advances_to_next_question(tmp_path):
+async def test_first_evasion_bridges_then_consecutive_evasion_pauses(tmp_path):
     db = DB(str(tmp_path / "virtualme.db"))
     await db.init()
     selector = _FixedSelector()
@@ -223,8 +223,8 @@ async def test_consecutive_evasion_advances_to_next_question(tmp_path):
     first_reply = await process_turn("u1", "不要問這個", claude, db, selector, settings)
     second_reply = await process_turn("u1", "還是不想答", claude, db, selector, settings)
 
-    assert "先停" in first_reply
-    assert "換題" in first_reply
+    assert "這題如果不好說" in first_reply
+    assert "請說說您最近的工作狀況。" in first_reply
     assert "先停" in second_reply
     async with aiosqlite.connect(db.path) as conn:
         row = await (
