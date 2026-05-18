@@ -1,5 +1,6 @@
 import json
 
+from virtualme.interview.briefing import INTERVIEW_PURPOSE, InterviewBriefing
 from virtualme.interview.depth_evaluator import TurnKind, evaluate_depth
 from virtualme.storage.db import Layer
 
@@ -12,8 +13,10 @@ class _Content:
 class _Messages:
     def __init__(self, text: str):
         self.text = text
+        self.calls = []
 
     async def create(self, **kwargs):
+        self.calls.append(kwargs)
         return type("Response", (), {"content": [_Content(self.text)]})
 
 
@@ -101,3 +104,22 @@ async def test_high_confidence_evasion_stays_evasion():
 
     assert assessment.kind == TurnKind.EVASION
     assert assessment.needs_follow_up is False
+
+
+async def test_depth_prompt_includes_briefing_when_present():
+    claude = _Claude(_assessment())
+    briefing = InterviewBriefing(
+        purpose=INTERVIEW_PURPOSE,
+        progress="Week 1 of 4.",
+        durable_summary="- durable",
+        coverage_gaps="- gap",
+        recent_transcript="受訪者: 前一輪回答",
+    )
+
+    await evaluate_depth("answer", "Question?", claude, briefing)
+
+    prompt = claude.messages.calls[0]["messages"][0]["content"]
+    assert "INTERVIEW PURPOSE:" in prompt
+    assert "Treat confusion, hesitation, doubt" in prompt
+    assert "RECENT CONVERSATION:" in prompt
+    assert "WHAT WE KNOW SO FAR:" not in prompt

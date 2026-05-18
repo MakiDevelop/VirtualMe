@@ -3,14 +3,19 @@ from types import SimpleNamespace
 from pydantic import SecretStr
 
 from virtualme.config import Settings
+from virtualme.interview import bot
 from virtualme.interview.bot import (
+    _final_reply,
     _handle_light_greeting,
     _handle_non_answer,
     _is_control_message,
     _pause_current_question,
     _resolve_current_question,
+    process_turn,
 )
-from virtualme.storage.db import Dimension, Question, Session
+from virtualme.interview.briefing import INTERVIEW_PURPOSE, InterviewBriefing
+from virtualme.interview.depth_evaluator import TurnAssessment, TurnKind
+from virtualme.storage.db import DB, Dimension, Layer, Question, Session
 
 
 class _Content:
@@ -19,7 +24,11 @@ class _Content:
 
 
 class _Messages:
+    def __init__(self):
+        self.calls = []
+
     async def create(self, **kwargs):
+        self.calls.append(kwargs)
         text = kwargs["messages"][0]["content"].split("Ask this next: ", 1)[1]
         return type("Response", (), {"content": [_Content(text)]})
 
@@ -176,3 +185,86 @@ async def test_resolve_current_question_uses_pool_question_when_last_assistant_t
     resolved = await _resolve_current_question(db, _selector(question), session_id=1, week=1)
 
     assert resolved.text == question.text
+
+
+async def test_final_reply_system_prompt_includes_briefing_when_present():
+    question = Question(
+        id="Q1",
+        week=1,
+        dimension=Dimension.STATE,
+        text="請說說您最近的工作狀況。",
+    )
+    claude = _Claude()
+    briefing = InterviewBriefing(
+        purpose=INTERVIEW_PURPOSE,
+        progress="Week 1 of 4.",
+        durable_summary="- durable",
+        coverage_gaps="- gap",
+        recent_transcript="受訪者: 前一輪回答",
+    )
+
+    reply = await _final_reply("u1", question, claude, _DB(count=0), briefing)
+
+    system = claude.messages.calls[0]["system"]
+    assert reply == question.text
+    assert "INTERVIEW PURPOSE:" in system
+    assert "WHAT WE KNOW SO FAR:" in system
+    assert "Accumulated anchors:" not in system
+
+
+async def test_process_turn_builds_briefing_once_and_passes_downstream(tmp_path, monkeypatch):
+    db = DB(str(tmp_path / "virtualme.db"))
+    await db.init()
+    question = Question(
+        id="Q1",
+        week=1,
+        dimension=Dimension.STATE,
+        text="How has work been?",
+    )
+    selector = SimpleNamespace(
+        question_pool={1: [question]},
+        select_next=lambda *args, **kwargs: None,
+    )
+    settings = Settings(anthropic_api_key=SecretStr("test"), use_ppa=False)
+    briefing = InterviewBriefing(
+        purpose=INTERVIEW_PURPOSE,
+        progress="Week 1 of 1.",
+        durable_summary="No durable signal extracted yet.",
+        coverage_gaps="No computed coverage gaps yet.",
+        recent_transcript="No recent conversation yet.",
+    )
+    calls = []
+
+    async def fake_build(db_arg, interviewee_id, session, max_week):
+        calls.append(("build", interviewee_id, session.id, max_week))
+        return briefing
+
+    async def fake_evaluate_depth(answer, current_question, claude, briefing_arg=None):
+        calls.append(("depth", briefing_arg))
+        return TurnAssessment(
+            kind=TurnKind.SUFFICIENT,
+            depth=Layer.PRINCIPLE,
+            needs_follow_up=False,
+            confidence=0.9,
+        )
+
+    async def fake_extract_anchors(turn, current_question, claude, briefing_arg=None):
+        calls.append(("anchor", briefing_arg))
+        return []
+
+    async def fake_final_reply(interviewee_id, question, claude, db, briefing_arg=None):
+        calls.append(("final", briefing_arg))
+        return "final question"
+
+    monkeypatch.setattr(bot, "build_interview_briefing", fake_build)
+    monkeypatch.setattr(bot, "evaluate_depth", fake_evaluate_depth)
+    monkeypatch.setattr(bot, "extract_anchors", fake_extract_anchors)
+    monkeypatch.setattr(bot, "_final_reply", fake_final_reply)
+
+    reply = await process_turn("u1", "I value direct evidence.", object(), db, selector, settings)
+
+    assert reply == "final question"
+    assert calls[0] == ("build", "u1", 1, 1)
+    assert ("depth", briefing) in calls
+    assert ("anchor", briefing) in calls
+    assert ("final", briefing) in calls

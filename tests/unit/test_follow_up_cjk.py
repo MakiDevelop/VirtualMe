@@ -1,3 +1,4 @@
+from virtualme.interview.briefing import INTERVIEW_PURPOSE, InterviewBriefing
 from virtualme.interview.follow_up import (
     FOLLOW_UP_RULE_PROMPTS,
     FollowUpRule,
@@ -65,6 +66,44 @@ async def test_generate_follow_up_prompt_includes_rule_instruction_and_anchor_gu
     assert "Do not ask what a hedge word" in prompt
     assert question in prompt
     assert answer in prompt
+
+
+async def test_generate_follow_up_prompt_includes_briefing_when_present(monkeypatch):
+    captured = {}
+
+    class FakeContent:
+        def __init__(self, text):
+            self.text = text
+
+    class FakeResponse:
+        def __init__(self, text):
+            self.content = [FakeContent(text)]
+
+    async def fake_create_message(*args, **kwargs):
+        captured["messages"] = kwargs["messages"]
+        return FakeResponse("哪個壓力最明顯?")
+
+    monkeypatch.setattr("virtualme.interview.follow_up.create_message", fake_create_message)
+    briefing = InterviewBriefing(
+        purpose=INTERVIEW_PURPOSE,
+        progress="Week 1 of 3.",
+        durable_summary="- durable",
+        coverage_gaps="- gap",
+        recent_transcript="受訪者: 前一輪回答",
+    )
+
+    await generate_follow_up(
+        FollowUpRule.R1_FACT_TO_PATTERN,
+        "我昨天卡住了",
+        "最近工作如何?",
+        claude=None,
+        briefing=briefing,
+    )
+
+    prompt = captured["messages"][0]["content"]
+    assert "INTERVIEW PURPOSE:" in prompt
+    assert "STILL TO COVER:" in prompt
+    assert "RECENT CONVERSATION:" in prompt
 
 
 async def test_generate_follow_up_r5_returns_canned_response_without_llm(monkeypatch):
