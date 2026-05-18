@@ -8,6 +8,7 @@ from virtualme.config import Settings
 from virtualme.export.auto import auto_export_persona
 from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
+from virtualme.interview.briefing import InterviewBriefing, build_interview_briefing
 from virtualme.interview.commands import (
     DIMENSION_LABELS,
     GenerateProfileRequest,
@@ -101,6 +102,7 @@ async def process_turn(
         else await db.get_current_week(interviewee_id, max_week)
     )
     session = await db.get_or_create_session(interviewee_id, week=week)
+    briefing = await build_interview_briefing(db, interviewee_id, session, max_week)
     command = pre_gate_command
     if is_session_closing(incoming_message):
         return await _close_session(
@@ -124,6 +126,7 @@ async def process_turn(
             db,
             selector,
             settings,
+            briefing,
         )
     turn_count = await db.count_turns(session.id)
     if _is_light_greeting(incoming_message):
@@ -134,6 +137,7 @@ async def process_turn(
             active_client,
             db,
             selector,
+            briefing,
         )
 
     scrub_result = scrub_pii(incoming_message)
@@ -150,11 +154,11 @@ async def process_turn(
     asked_question_ids = await db.load_asked_question_ids(interviewee_id)
     current_question = await _resolve_current_question(db, selector, session.id, session.week)
     assessment = await evaluate_depth(
-        scrub_result.scrubbed_text, current_question.text, active_client
+        scrub_result.scrubbed_text, current_question.text, active_client, briefing
     )
     if assessment.parse_failed:
         reply = await _restate_current_question(
-            interviewee_id, current_question, active_client, db
+            interviewee_id, current_question, active_client, db, briefing
         )
         await db.save_turn(session.id, "assistant", reply)
         return reply
@@ -171,6 +175,7 @@ async def process_turn(
             is_meta=True,
             anchors_by_dimension=anchors_by_dimension,
             asked_question_ids=asked_question_ids,
+            briefing=briefing,
         )
         await db.save_turn(session.id, "assistant", reply)
         return reply
@@ -187,6 +192,7 @@ async def process_turn(
             is_meta=False,
             anchors_by_dimension=anchors_by_dimension,
             asked_question_ids=asked_question_ids,
+            briefing=briefing,
         )
         await db.save_turn(session.id, "assistant", reply)
         return reply
@@ -197,7 +203,9 @@ async def process_turn(
     rule = select_rule(scrub_result.scrubbed_text, depth, all_anchors)
 
     if assessment.kind == TurnKind.SUFFICIENT:
-        extracted_anchors = await extract_anchors(user_turn, current_question, active_client)
+        extracted_anchors = await extract_anchors(
+            user_turn, current_question, active_client, briefing
+        )
         for anchor in extracted_anchors:
             await db.save_anchor(
                 interviewee_id,
@@ -217,7 +225,7 @@ async def process_turn(
     if should_probe:
         await db.record_question_probe(interviewee_id, current_question.id, session.week)
         reply = await generate_follow_up(
-            rule, scrub_result.scrubbed_text, current_question.text, active_client
+            rule, scrub_result.scrubbed_text, current_question.text, active_client, briefing
         )
     else:
         excluded = {current_question.id} if probe_count >= MAX_PROBES_PER_QUESTION else set()
@@ -234,7 +242,9 @@ async def process_turn(
             await db.set_current_question_id(session.id, next_question.id)
             await db.record_question_asked(interviewee_id, next_question.id, session.week)
         if next_question is not None:
-            reply = await _final_reply(interviewee_id, next_question, active_client, db)
+            reply = await _final_reply(
+                interviewee_id, next_question, active_client, db, briefing
+            )
         elif settings.use_ppa:
             from virtualme.interview.ppa import ppa_response
             from virtualme.interview.reinjection import build_reinjection_anchor, should_reinject
@@ -246,7 +256,9 @@ async def process_turn(
                 dialogue_context = f"{anchor}\n\n{dialogue_context}" if anchor else dialogue_context
             reply = await ppa_response(dialogue_context, triples, active_client, settings)
         else:
-            reply = await _final_reply(interviewee_id, DEFAULT_QUESTION, active_client, db)
+            reply = await _final_reply(
+                interviewee_id, DEFAULT_QUESTION, active_client, db, briefing
+            )
 
     await db.save_turn(session.id, "assistant", reply)
     turns_so_far = await db.load_session_turns(session.id)
@@ -316,6 +328,7 @@ async def _handle_non_answer(
     is_meta: bool,
     anchors_by_dimension: dict,
     asked_question_ids: set[str],
+    briefing: InterviewBriefing | None = None,
 ) -> str:
     count = await db.record_question_non_answer(
         interviewee_id, current_question.id, session.week
@@ -325,12 +338,12 @@ async def _handle_non_answer(
         # 分類器必有誤判, runtime 不該讓一次 EVASION 判斷就停題。
         if count < 2:
             return await _gentle_evasion_bridge(
-                interviewee_id, current_question, active_client, db
+                interviewee_id, current_question, active_client, db, briefing
             )
         return _pause_current_question()
     if count < 2:
         return await _bridge_to_current_question(
-            interviewee_id, user_text, current_question, active_client, db
+            interviewee_id, user_text, current_question, active_client, db, briefing
         )
 
     next_question = selector.select_next(
@@ -344,38 +357,51 @@ async def _handle_non_answer(
     await db.reset_question_non_answer(interviewee_id, current_question.id)
     if next_question is None:
         return await _bridge_to_current_question(
-            interviewee_id, user_text, current_question, active_client, db
+            interviewee_id, user_text, current_question, active_client, db, briefing
         )
 
     await db.set_current_question_id(session.id, next_question.id)
     await db.record_question_asked(interviewee_id, next_question.id, session.week)
-    return await _final_reply(interviewee_id, next_question, active_client, db)
+    return await _final_reply(interviewee_id, next_question, active_client, db, briefing)
 
 
 async def _restate_current_question(
-    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+    interviewee_id: str,
+    question: Question,
+    claude: AsyncAnthropic,
+    db: DB,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
     # Re-ask via _final_reply so the question is rendered in Traditional Chinese
     # — the English question-pool text must never reach the interviewee.
-    asked = await _final_reply(interviewee_id, question, claude, db)
+    asked = await _final_reply(interviewee_id, question, claude, db, briefing)
     return f"我們先回到剛才這題。\n{asked}"
 
 
 async def _bridge_to_current_question(
-    interviewee_id: str, user_text: str, question: Question, claude: AsyncAnthropic, db: DB
+    interviewee_id: str,
+    user_text: str,
+    question: Question,
+    claude: AsyncAnthropic,
+    db: DB,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
     if _asks_for_traditional_chinese(user_text):
         prefix = "可以，我們用繁體中文。"  # noqa: RUF001
     else:
         prefix = "可以，我先記下這點。"  # noqa: RUF001
-    asked = await _final_reply(interviewee_id, question, claude, db)
+    asked = await _final_reply(interviewee_id, question, claude, db, briefing)
     return f"{prefix}我們回到剛才這題。\n{asked}"
 
 
 async def _gentle_evasion_bridge(
-    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+    interviewee_id: str,
+    question: Question,
+    claude: AsyncAnthropic,
+    db: DB,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
-    asked = await _final_reply(interviewee_id, question, claude, db)
+    asked = await _final_reply(interviewee_id, question, claude, db, briefing)
     return f"這題如果不好說, 可以慢慢來 —— 挑一個你想到的小片段講就好。\n{asked}"
 
 
@@ -423,6 +449,7 @@ async def _handle_light_greeting(
     active_client: AsyncAnthropic,
     db: DB,
     selector: QuestionSelector,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
     """Resume from known progress instead of classifying a greeting as an answer."""
     scrub_result = scrub_pii(incoming_message)
@@ -447,7 +474,9 @@ async def _handle_light_greeting(
             or _is_control_message(raw_last_asked)
             or _has_unresolved_placeholder(last_asked)
         ):
-            rendered_question = await _final_reply(interviewee_id, question, active_client, db)
+            rendered_question = await _final_reply(
+                interviewee_id, question, active_client, db, briefing
+            )
             reply = (
                 f"{progress_prefix}\n"
                 f"我們從【{DIMENSION_LABELS[question.dimension]}】開始。\n"
@@ -460,7 +489,9 @@ async def _handle_light_greeting(
                 f"剛才問的是:\n{last_asked}"
             )
     else:
-        rendered_question = await _final_reply(interviewee_id, question, active_client, db)
+        rendered_question = await _final_reply(
+            interviewee_id, question, active_client, db, briefing
+        )
         reply = (
             f"{progress_prefix}\n"
             f"我們從【{DIMENSION_LABELS[question.dimension]}】開始。\n"
@@ -558,6 +589,7 @@ async def _handle_command(
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
     if isinstance(command, GenerateProfileRequest):
@@ -581,7 +613,7 @@ async def _handle_command(
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
         await db.save_redactions(user_turn.id, scrub_result.redactions)
         reply, new_session = await _handle_restart(
-            interviewee_id, active_client, db, selector, settings
+            interviewee_id, active_client, db, selector, settings, briefing
         )
         await db.save_turn(new_session.id, "assistant", reply)
         return reply
@@ -672,6 +704,7 @@ async def _handle_restart(
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
+    briefing: InterviewBriefing | None = None,
 ) -> tuple[str, Session]:
     archive_note = "已先輸出目前的 markdown archive 快照。"
     try:
@@ -686,7 +719,9 @@ async def _handle_restart(
     first_question = _default_question(selector, 1)
     await db.set_current_question_id(new_session.id, first_question.id)
     await db.record_question_asked(interviewee_id, first_question.id, 1)
-    rendered_question = await _final_reply(interviewee_id, first_question, active_client, db)
+    rendered_question = await _final_reply(
+        interviewee_id, first_question, active_client, db, briefing
+    )
     return format_restart_reply(archive_note, archived_counts, rendered_question), new_session
 
 
@@ -768,17 +803,26 @@ def _all_questions(selector: QuestionSelector) -> list[Question]:
 
 
 async def _final_reply(
-    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+    interviewee_id: str,
+    question: Question,
+    claude: AsyncAnthropic,
+    db: DB,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
-    anchors = await db.load_anchors_summary(interviewee_id)
-    gaps = await db.compute_coverage_gap(interviewee_id)
+    briefing_text = f"{briefing.render('full')}\n\n" if briefing is not None else ""
+    if briefing is None:
+        anchors = await db.load_anchors_summary(interviewee_id)
+        gaps = await db.compute_coverage_gap(interviewee_id)
+        context_lines = f"Accumulated anchors: {anchors}\nCoverage gaps: {gaps}"
+    else:
+        context_lines = ""
     system = f"""
+{briefing_text}
 You are the interview assistant for {interviewee_id}. Ask one question at a time.
 {INTERVIEW_OUTPUT_LANGUAGE}
 Translate the source question into natural Traditional Chinese, preserving its
 exact meaning, depth, and directness. Do not advise, praise, soften, or add commentary.
-Accumulated anchors: {anchors}
-Coverage gaps: {gaps}
+{context_lines}
 """
     response = await create_message(
         claude,

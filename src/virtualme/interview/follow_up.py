@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from anthropic import AsyncAnthropic
 
+from virtualme.interview.briefing import InterviewBriefing
 from virtualme.interview.lang import INTERVIEW_OUTPUT_LANGUAGE, length_units, tokens
 from virtualme.interview.models import MODEL_STANDARD, create_message
 from virtualme.storage.db import Anchor, Layer
@@ -81,12 +82,18 @@ def select_rule(
 
 
 async def generate_follow_up(
-    rule: FollowUpRule, answer: str, original_question: str, claude: AsyncAnthropic
+    rule: FollowUpRule,
+    answer: str,
+    original_question: str,
+    claude: AsyncAnthropic,
+    briefing: InterviewBriefing | None = None,
 ) -> str:
     if rule == FollowUpRule.R5_REPEAT_TO_TRIANGULATE:
         return "這個原則我想我們已經談得夠清楚了。讓我換個角度問。"
     rule_instruction = FOLLOW_UP_RULE_PROMPTS[rule]
+    briefing_text = f"{briefing.render('follow_up')}\n\n" if briefing is not None else ""
     prompt = f"""
+{briefing_text}
 Generate one short follow-up question.
 
 Rule: {rule.value}

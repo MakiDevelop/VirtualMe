@@ -2,6 +2,7 @@ import json
 
 from anthropic import AsyncAnthropic
 
+from virtualme.interview.briefing import InterviewBriefing
 from virtualme.interview.json_utils import extract_json_payload
 from virtualme.interview.models import MODEL_STANDARD, create_message
 from virtualme.storage.db import Anchor, Dimension, Layer, Question, Turn
@@ -11,8 +12,11 @@ async def extract_anchors(
     turn: Turn,
     current_question: Question,
     claude: AsyncAnthropic,
+    briefing: InterviewBriefing | None = None,
 ) -> list[Anchor]:
+    briefing_text = f"{briefing.render('anchor')}\n\n" if briefing is not None else ""
     prompt = f"""
+{briefing_text}
 Extract 1-3 anchors as JSON list. Fields: dimension, layer, content.
 Use dimensions: {[dimension.value for dimension in Dimension]}.
 Use layers: fact, pattern, principle.

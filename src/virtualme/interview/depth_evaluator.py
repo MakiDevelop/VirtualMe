@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from anthropic import AsyncAnthropic
 
+from virtualme.interview.briefing import InterviewBriefing
 from virtualme.interview.json_utils import extract_json_payload
 from virtualme.interview.models import MODEL_FAST, create_message
 from virtualme.storage.db import Layer
@@ -34,9 +35,14 @@ class TurnAssessment:
 
 
 async def evaluate_depth(
-    answer: str, current_question: str, claude: AsyncAnthropic
+    answer: str,
+    current_question: str,
+    claude: AsyncAnthropic,
+    briefing: InterviewBriefing | None = None,
 ) -> TurnAssessment:
+    briefing_text = f"{briefing.render('classifier')}\n\n" if briefing is not None else ""
     prompt = f"""
+{briefing_text}
 Assess this interview turn. Return JSON only, no markdown.
 
 Schema:
