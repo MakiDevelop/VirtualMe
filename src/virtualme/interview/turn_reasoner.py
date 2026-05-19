@@ -3,13 +3,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Optional
 
 from anthropic import AsyncAnthropic
 
 from virtualme.interview.guardrail import Guardrail
 from virtualme.interview.json_utils import extract_json_payload
-from virtualme.interview.models import create_message
+from virtualme.interview.models import MODEL_FAST, create_message
 from virtualme.interview.turn_state import TurnState
 
 
@@ -41,13 +40,14 @@ class TurnReasonerOutput:
     boundary_status: BoundaryStatus
     engagement_state: EngagementState
     next_move: NextMove
-    next_question_id: Optional[str]
+    next_question_id: str | None
     should_echo: bool
-    echo_content: Optional[str]
-    reflection_note: Optional[str]
+    echo_content: str | None
+    reflection_note: str | None
     reply: str
 
 
+# ruff: noqa: RUF001,W291  (prompt uses intentional CJK punctuation)
 SYSTEM_PROMPT = """你是一位專業且極度謹慎的訪談推理助手。你的任務是幫助建立受訪者的人格模型，但必須把「不傷害受訪者」和「避免過度解讀」放在最高優先。
 
 你必須嚴格按照以下步驟進行思考，並在最終輸出中反映你的判斷。
@@ -184,8 +184,8 @@ class TurnReasoner:
     def __init__(
         self,
         client: AsyncAnthropic,
-        guardrail: Optional[Guardrail] = None,
-        model: str = "claude-3-5-haiku-20241022",
+        guardrail: Guardrail | None = None,
+        model: str = MODEL_FAST,
     ):
         self.client = client
         self.guardrail = guardrail or Guardrail()
