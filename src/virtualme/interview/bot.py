@@ -1,4 +1,5 @@
 import logging
+import os
 import unicodedata
 
 from anthropic import AsyncAnthropic
@@ -261,6 +262,7 @@ async def process_turn(
     if assessment.kind == TurnKind.SUFFICIENT:
         extracted_anchors = await extract_anchors(user_turn, current_question, active_client)
         for anchor in extracted_anchors:
+            model_name = os.environ.get("REASONER_MODEL_NAME")
             await db.save_anchor(
                 interviewee_id,
                 anchor.dimension,
@@ -268,6 +270,7 @@ async def process_turn(
                 anchor.content,
                 anchor.source_turn_ids,
                 anchor.source_question_ids,
+                model=model_name,
             )
 
     probe_count = await db.get_probe_count(interviewee_id, current_question.id)
