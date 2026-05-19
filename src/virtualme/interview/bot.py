@@ -30,6 +30,7 @@ from virtualme.interview.session_lifecycle import (
     is_session_closing,
 )
 from virtualme.interview.turn_reasoner import TurnReasoner
+from virtualme.interview.turn_reasoner_schema import BoundaryStatus, NextMove
 from virtualme.interview.turn_state import build_turn_state
 from virtualme.storage.db import DB, Dimension, Question, Session
 from virtualme.subject import score_completeness
@@ -118,14 +119,24 @@ async def process_turn(
             selector,
         )
 
-    # === L2 TurnReasoner (whitelist-only safe rollout) ===
-    # Only the designated test users (e.g. Maki's own LINE id) go through the new reasoning engine.
-    # Everyone else (and special paths above) continue on the proven old path.
+    # === L2 TurnReasoner (whitelist-only) ===
+    # Only designated test users go through the reasoning engine.
+    # The engine now actually respects next_move / next_question_id / echo (basic version).
     if getattr(settings, "reasoning_turn_enabled", False):
         test_ids_raw = getattr(settings, "reasoning_test_user_ids", "") or ""
         allowed = {x.strip() for x in test_ids_raw.split(",") if x.strip()}
         if interviewee_id in allowed:
-            logger.info("[NEW REASONER] L2 path activated for %s", interviewee_id)
+            # Record the user message first so TurnState has up-to-date history
+            scrub_result = scrub_pii(incoming_message)
+            if scrub_result.redactions:
+                logger.info(
+                    "PII redacted: %s items in turn from %s",
+                    len(scrub_result.redactions),
+                    interviewee_id,
+                )
+            user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+            await db.save_redactions(user_turn.id, scrub_result.redactions)
+
             turn_state = await build_turn_state(
                 interviewee_id=interviewee_id,
                 db=db,
@@ -133,12 +144,41 @@ async def process_turn(
                 session=session,
                 adaptive=settings.adaptive_extraction,
             )
+
             reasoner = TurnReasoner(active_client)
             reasoner_output = await reasoner.run(turn_state)
-            # MVP: directly use the reply produced by the reasoner + Guardrail.
-            # Full next_move / echo / current_question update / reflection_note persistence come in follow-up iterations.
-            await db.save_turn(session.id, "assistant", reasoner_output.reply)
-            return reasoner_output.reply
+
+            # Rich decision log — this is what we will watch to debug ghost-wall
+            logger.info(
+                "[NEW REASONER] %s | move=%s boundary=%s eng=%s next_q=%s echo=%s has_reflection=%s",
+                interviewee_id,
+                reasoner_output.next_move,
+                reasoner_output.boundary_status,
+                reasoner_output.engagement_state,
+                reasoner_output.next_question_id,
+                reasoner_output.should_echo,
+                bool(reasoner_output.reflection_note),
+            )
+
+            reply_text = reasoner_output.reply
+            if reasoner_output.should_echo and reasoner_output.echo_content:
+                reply_text = f"{reasoner_output.echo_content}\n\n{reply_text}"
+
+            # Act on the reasoner's decision (MVP level)
+            if reasoner_output.next_move == NextMove.ADVANCE and reasoner_output.next_question_id:
+                await db.set_current_question_id(session.id, reasoner_output.next_question_id)
+                await db.record_question_asked(
+                    interviewee_id, reasoner_output.next_question_id, session.week
+                )
+                logger.info("[NEW REASONER] advanced to question %s", reasoner_output.next_question_id)
+
+            if reasoner_output.next_move == NextMove.HONOR_SKIP or reasoner_output.boundary_status == BoundaryStatus.EXPLICIT_REFUSAL:
+                logger.info("[NEW REASONER] honored skip / explicit refusal")
+
+            await db.save_turn(session.id, "assistant", reply_text)
+
+            # Note: finalize / auto-export still skipped in this early path
+            return reply_text
 
     scrub_result = scrub_pii(incoming_message)
     if scrub_result.redactions:
