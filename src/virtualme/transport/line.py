@@ -11,6 +11,8 @@ from linebot.v3.messaging import (
     AsyncApiClient,
     AsyncMessagingApi,
     Configuration,
+    FlexMessage,
+    FlexMessageContents,
     PushMessageRequest,
     ReplyMessageRequest,
     TextMessage,
@@ -148,9 +150,28 @@ async def _send_reply_or_push(
     line_bot_api: AsyncMessagingApi,
     reply_token: str,
     user_id: str,
-    reply: str,
+    reply: str | dict,
 ) -> bool:
     token_hint = reply_token[:8]
+
+    # Support Flex Message (progress card etc.)
+    if isinstance(reply, dict) and reply.get("type") == "flex":
+        try:
+            flex_message = FlexMessage(
+                alt_text=reply.get("altText", "訪談進度"),
+                contents=FlexMessageContents(**reply["contents"]),
+            )
+            await line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=reply_token, messages=[flex_message])
+            )
+            logger.info("LINE Flex reply sent with token %s", token_hint)
+            return True
+        except Exception as flex_exc:
+            logger.error("LINE Flex reply failed for %s: %s", user_id, flex_exc)
+            # fallback to text
+            reply = "目前進度卡片暫時無法顯示，已切換為文字模式。"
+
+    # Normal text path
     try:
         await line_bot_api.reply_message(
             ReplyMessageRequest(

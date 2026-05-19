@@ -23,6 +23,7 @@ from virtualme.interview.follow_up import generate_follow_up, select_rule
 from virtualme.interview.lang import INTERVIEW_OUTPUT_LANGUAGE
 from virtualme.interview.models import MODEL_DEEP, create_message
 from virtualme.interview.pii import scrub_pii
+from virtualme.interview.progress_card import get_progress_flex_for_user
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.interview.session_lifecycle import (
     finalize_session_if_closing,
@@ -84,6 +85,13 @@ async def process_turn(
         else await db.get_current_week(interviewee_id, max_week)
     )
     session = await db.get_or_create_session(interviewee_id, week=week)
+
+    # === Progress card (user-triggered or long gap) ===
+    progress_keywords = ["進度", "目前進度", "訪談進度", "收集進度", "請問現在的訪談進度"]
+    if any(kw in incoming_message for kw in progress_keywords):
+        logger.info("[PROGRESS] User requested progress card: %s", interviewee_id)
+        return get_progress_flex_for_user(interviewee_id, trigger="user_asked")
+
     command = detect_command(incoming_message)
     if is_session_closing(incoming_message):
         return await _close_session(
