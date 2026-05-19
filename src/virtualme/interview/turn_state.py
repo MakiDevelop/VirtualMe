@@ -19,10 +19,12 @@ turn_state.py self-contained in L1. Will be consolidated when wiring in L4.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from pydantic import BaseModel, ConfigDict
 
 from virtualme.interview.question_selector import QuestionSelector
-from virtualme.storage.db import DB, Anchor, Dimension, Question, Session, Turn
+from virtualme.storage.db import DB, Anchor, Dimension, Layer, Question, Session, Turn
 
 # Fallback goal for M1 slice (explicit, matches the "會推理、不像機器人" objective).
 # Real per-subject goal (if populated via future UI or init) takes precedence.
@@ -41,6 +43,31 @@ _FALLBACK_QUESTION = Question(
     text="How has your work been this past week?",
     energy_tax="low",
 )
+
+
+# === Layered Coverage Model (for real 8維 × 3層 progress) ===
+
+@dataclass
+class LayerProgress:
+    """Progress for one layer of one dimension."""
+    evidence_count: int = 0
+    quality_score: float = 0.0      # 0.0 ~ 1.0
+    status: str = "none"            # "none" | "partial" | "sufficient"
+
+
+@dataclass
+class DimensionProgress:
+    """Progress across three layers for one dimension."""
+    dimension: Dimension
+    layers: dict[Layer, LayerProgress] = field(default_factory=dict)
+    overall_reached: Layer | None = None   # highest layer that reached "sufficient"
+
+
+@dataclass
+class CoverageSnapshot:
+    """Complete snapshot of collection progress for all 8 dimensions."""
+    per_dimension: dict[Dimension, DimensionProgress] = field(default_factory=dict)
+    overall_completion: float = 0.0        # rough 0.0~1.0 across all relevant layers
 
 
 class TurnState(BaseModel):
@@ -70,6 +97,9 @@ class TurnState(BaseModel):
 
     coverage_gaps: dict[Dimension, float] = {}
     """Coverage gap 0~1 (值越高越缺)。由 anchors 動態計算。"""
+
+    coverage_snapshot: CoverageSnapshot = CoverageSnapshot()
+    """Real per-dimension per-layer progress (L2/L3)."""
 
     probe_count: int = 0
     """本題已追問次數 (硬 cap 由 L3 護欄管)。"""
@@ -106,6 +136,9 @@ async def build_turn_state(
     coverage_gaps = await db.compute_coverage_gap(interviewee_id)
     probe_count = await db.get_probe_count(interviewee_id, current_q.id)
 
+    # === Compute real Layered Coverage (first version) ===
+    coverage_snapshot = _compute_coverage_snapshot(anchors_summary)
+
     asked = await db.load_asked_question_ids(interviewee_id)
 
     # Relevant pool for candidates (same policy as selector.select_next)
@@ -126,6 +159,7 @@ async def build_turn_state(
         recent_history=recent_history,
         anchors_summary=anchors_summary,
         coverage_gaps=coverage_gaps,
+        coverage_snapshot=coverage_snapshot,
         probe_count=probe_count,
         candidate_questions=candidate_questions,
     )
@@ -179,3 +213,70 @@ def _default_question(selector: QuestionSelector, week: int) -> Question:
 def _all_questions(selector: QuestionSelector) -> list[Question]:
     """Flatten the entire pool (used for lookup by id)."""
     return [question for questions in selector.question_pool.values() for question in questions]
+
+
+# === Real Coverage Computation (L2 first version) ===
+
+def _compute_coverage_snapshot(
+    anchors_summary: dict[Dimension, list[Anchor]],
+) -> CoverageSnapshot:
+    """First-pass real computation of per-dimension per-layer progress.
+
+    This is intentionally simple for L2. Quality scoring can be made much
+    smarter in L3 (triangulation, recency, contradiction, source diversity, etc.).
+    """
+    snapshot = CoverageSnapshot()
+    total_score_sum = 0.0
+    dim_count = 0
+
+    for dim in list(Dimension):
+        dim_prog = DimensionProgress(dimension=dim)
+        dim_prog.layers = {layer: LayerProgress() for layer in Layer}
+
+        anchors = anchors_summary.get(dim, []) if anchors_summary else []
+
+        layer_counts: dict[Layer, int] = {layer: 0 for layer in Layer}
+        for anchor in anchors:
+            if hasattr(anchor, "layer") and anchor.layer in layer_counts:
+                layer_counts[anchor.layer] += 1
+
+        # Simple scoring: ~0.25 per anchor, capped
+        for layer, count in layer_counts.items():
+            score = min(1.0, count * 0.28)
+            status = "none"
+            if score >= 0.75:
+                status = "sufficient"
+            elif score >= 0.35:
+                status = "partial"
+
+            dim_prog.layers[layer] = LayerProgress(
+                evidence_count=count,
+                quality_score=score,
+                status=status,
+            )
+
+            # Track highest layer reached at "sufficient"
+            if status == "sufficient":
+                if dim_prog.overall_reached is None:
+                    dim_prog.overall_reached = layer
+                else:
+                    # Simple order: SHALLOW < MIDDLE < DEEP
+                    order = [Layer.SHALLOW, Layer.MIDDLE, Layer.DEEP]
+                    if order.index(layer) > order.index(dim_prog.overall_reached):
+                        dim_prog.overall_reached = layer
+
+        # Rough dimension contribution (middle layer weighted more)
+        dim_score = (
+            dim_prog.layers[Layer.SHALLOW].quality_score * 0.2 +
+            dim_prog.layers[Layer.MIDDLE].quality_score * 0.6 +
+            dim_prog.layers[Layer.DEEP].quality_score * 0.2
+        )
+
+        snapshot.per_dimension[dim] = dim_prog
+        total_score_sum += dim_score
+        dim_count += 1
+
+    if dim_count > 0:
+        snapshot.overall_completion = round(total_score_sum / dim_count, 2)
+
+    return snapshot
