@@ -215,3 +215,56 @@ def get_progress_flex_for_user(
         "STATE": {"shallow": 0.65, "middle": 0.18, "deep": 0.0},
     }
     return build_progress_flex(snapshot, trigger=trigger)
+
+
+def get_progress_text_for_user(
+    interviewee_id: str,
+    trigger: str = "user_asked",
+) -> str:
+    """
+    Returns a clean text version of the progress report.
+    Used as reliable fallback while we stabilize the Flex Message sending.
+    """
+    snapshot = {
+        "VOICE": {"shallow": 0.6, "middle": 0.25, "deep": 0.0},
+        "BOUNDARIES": {"shallow": 0.35, "middle": 0.05, "deep": 0.0},
+        "SOUL": {"shallow": 0.45, "middle": 0.15, "deep": 0.0},
+        "SKILL": {"shallow": 0.92, "middle": 0.68, "deep": 0.12},
+        "PEOPLE": {"shallow": 0.55, "middle": 0.28, "deep": 0.0},
+        "HISTORY": {"shallow": 0.78, "middle": 0.35, "deep": 0.0},
+        "JOURNAL": {"shallow": 0.22, "middle": 0.0, "deep": 0.0},
+        "STATE": {"shallow": 0.65, "middle": 0.18, "deep": 0.0},
+    }
+
+    DIM_LABEL = {
+        "VOICE": "聲音/表達",
+        "BOUNDARIES": "界線/責任",
+        "SOUL": "靈魂/價值",
+        "SKILL": "專業技能",
+        "PEOPLE": "人際關係",
+        "HISTORY": "經歷/歷史",
+        "JOURNAL": "日誌/日常",
+        "STATE": "當下狀態",
+    }
+
+    lines = ["【目前訪談收集進度（八維 × 三層）】\n"]
+
+    for dim, data in snapshot.items():
+        label = DIM_LABEL.get(dim, dim)
+        s = data["shallow"]
+        m = data["middle"]
+        d = data["deep"]
+
+        def fmt(x):
+            if x >= 0.8: return "●●●"
+            elif x >= 0.5: return "●●○"
+            elif x >= 0.2: return "●○○"
+            else: return "○○○"
+
+        line = f"{label:8}  淺層:{fmt(s)}  中層:{fmt(m)}  深層:{fmt(d)}"
+        lines.append(line)
+
+    lines.append("\n（只有當回答貢獻有意義的證據時才會推進）")
+    lines.append("想繼續哪一塊或看更細的進度，告訴我即可。")
+
+    return "\n".join(lines)
