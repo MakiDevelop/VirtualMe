@@ -300,12 +300,17 @@ class TurnReasoner:
         gap_text = "\n".join(gap_lines) if gap_lines else "（目前各維度覆蓋尚可）"
 
         # Build human-readable coverage summary from the real snapshot
+        LAYER_LABEL = {
+            Layer.FACT: "淺層",
+            Layer.PATTERN: "中層",
+            Layer.PRINCIPLE: "深層",
+        }
         coverage_lines = []
         for dim, dprog in state.coverage_snapshot.per_dimension.items():
-            reached = dprog.overall_reached.value if dprog.overall_reached else "無"
-            mid = dprog.layers.get(Layer.MIDDLE)
-            mid_status = f"{mid.status}({mid.quality_score:.2f})" if mid else "none"
-            coverage_lines.append(f"- {dim.value}: 已跨 {reached} | 中層狀態 {mid_status}")
+            reached_label = LAYER_LABEL.get(dprog.overall_reached, "無") if dprog.overall_reached else "無"
+            pattern_layer = dprog.layers.get(Layer.PATTERN)
+            pattern_status = f"{pattern_layer.status}({pattern_layer.quality_score:.2f})" if pattern_layer else "none"
+            coverage_lines.append(f"- {dim.value}: 已跨 {reached_label} | 中層狀態 {pattern_status}")
         coverage_text = "\n".join(coverage_lines) if coverage_lines else "（尚無收集資料）"
 
         return f"""【訪談目標】

@@ -260,16 +260,16 @@ def _compute_coverage_snapshot(
                 if dim_prog.overall_reached is None:
                     dim_prog.overall_reached = layer
                 else:
-                    # Simple order: SHALLOW < MIDDLE < DEEP
-                    order = [Layer.SHALLOW, Layer.MIDDLE, Layer.DEEP]
+                    # Real Layer order: FACT < PATTERN < PRINCIPLE
+                    order = [Layer.FACT, Layer.PATTERN, Layer.PRINCIPLE]
                     if order.index(layer) > order.index(dim_prog.overall_reached):
                         dim_prog.overall_reached = layer
 
-        # Rough dimension contribution (middle layer weighted more)
+        # Rough dimension contribution (PATTERN weighted more)
         dim_score = (
-            dim_prog.layers[Layer.SHALLOW].quality_score * 0.2 +
-            dim_prog.layers[Layer.MIDDLE].quality_score * 0.6 +
-            dim_prog.layers[Layer.DEEP].quality_score * 0.2
+            dim_prog.layers[Layer.FACT].quality_score * 0.2 +
+            dim_prog.layers[Layer.PATTERN].quality_score * 0.6 +
+            dim_prog.layers[Layer.PRINCIPLE].quality_score * 0.2
         )
 
         snapshot.per_dimension[dim] = dim_prog
