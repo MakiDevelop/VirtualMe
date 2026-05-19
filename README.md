@@ -2,6 +2,8 @@
 
 > 把一個人**萃取**成 AI 代理人——用 8 週訪談，不用填表。
 
+**Current release: v1.0.0** — LINE dogfood baseline is working: the L2 reasoner updates real 8-dimension × 3-layer coverage, supports model-tagged Haiku/Sonnet trials via `REASONER_MODEL_NAME`, and exports reviewable persona markdown files.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![English](https://img.shields.io/badge/Lang-English-red.svg)](README.en.md)
@@ -89,6 +91,11 @@ VirtualMe 把這個發現延伸成可上線的 pipeline：
 
 匯出時會再次 scrub anchor 內容中的 PII；`interviewee_id`、資料夾名與 archive metadata 不會被改名，請不要用 email / 真名當 interviewee id。
 
+v1.0.0 的實測輸出包含兩種層級：
+
+- **Raw archive**：`python -m virtualme.export` 產生 8 個 dimension markdown、入口檔與 manifest。
+- **Review draft**：可依 anchors 人工整理成 `SOUL.md` / `VOICE.md` / `SKILL.md` / `PEOPLE.md` / `HISTORY.md` / `JOURNAL.md` / `BOUNDARIES.md` / `STATE.md` 八份可讀人格檔，用於「像 / 不像 / 缺例子」review。
+
 加上一個可用的 agent endpoint，可以：
 - 起草給客戶 / 候選人 / 同事的訊息
 - 用你的語氣回覆公開貼文
@@ -158,6 +165,20 @@ python scripts/init_db.py --path ./data/virtualme.db
 # Phase 0：CLI 跑一輪訪談（不接 LINE）
 python -m virtualme.cli --interviewee yourself
 ```
+
+### LINE dogfood / L2 reasoner
+
+v1.0.0 的 LINE path 已可用 feature flag 開啟新 reasoner。新路徑會在每輪訪談後寫入 anchors，讓「進度」查詢顯示真實的八維 × 三層 coverage。
+
+```env
+REASONING_TURN_ENABLED=true
+REASONING_TEST_USER_IDS=<your-line-user-id>
+
+# Optional: model trial label + reasoner model override
+REASONER_MODEL_NAME=claude-haiku-4-5
+```
+
+Haiku / Sonnet 對比時，切換 `REASONER_MODEL_NAME` 後 restart runtime；anchors 會保留產生模型標記，方便回頭比較。
 
 ### 本機 demo flow
 
