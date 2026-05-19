@@ -240,32 +240,55 @@ def _compute_coverage_snapshot(
             if hasattr(anchor, "layer") and anchor.layer in layer_counts:
                 layer_counts[anchor.layer] += 1
 
-        # Simple scoring: ~0.25 per anchor, capped
+        # --- Layer-dependent scoring (Option A) ---
+        # We enforce that higher layers only get full credit if lower layers have sufficient foundation.
+        # This prevents the weird "no shallow but has middle/deep" situation.
+
+        raw_scores = {}
         for layer, count in layer_counts.items():
-            score = min(1.0, count * 0.28)
+            raw_scores[layer] = min(1.0, count * 0.28)
+
+        # Apply layer dependency
+        shallow = raw_scores.get(Layer.FACT, 0.0)
+        middle_raw = raw_scores.get(Layer.PATTERN, 0.0)
+        deep_raw = raw_scores.get(Layer.PRINCIPLE, 0.0)
+
+        # Middle layer progress is discounted by how much shallow foundation exists
+        middle = middle_raw * max(0.3, shallow)   # at least keep a little credit even with weak shallow
+
+        # Deep layer progress is discounted by middle foundation
+        deep = deep_raw * max(0.3, middle)
+
+        effective = {
+            Layer.FACT: shallow,
+            Layer.PATTERN: middle,
+            Layer.PRINCIPLE: deep,
+        }
+
+        for layer in [Layer.FACT, Layer.PATTERN, Layer.PRINCIPLE]:
+            score = effective[layer]
             status = "none"
             if score >= 0.75:
                 status = "sufficient"
             elif score >= 0.35:
                 status = "partial"
 
+            count = layer_counts.get(layer, 0)
             dim_prog.layers[layer] = LayerProgress(
                 evidence_count=count,
                 quality_score=score,
                 status=status,
             )
 
-            # Track highest layer reached at "sufficient"
             if status == "sufficient":
                 if dim_prog.overall_reached is None:
                     dim_prog.overall_reached = layer
                 else:
-                    # Real Layer order: FACT < PATTERN < PRINCIPLE
                     order = [Layer.FACT, Layer.PATTERN, Layer.PRINCIPLE]
                     if order.index(layer) > order.index(dim_prog.overall_reached):
                         dim_prog.overall_reached = layer
 
-        # Rough dimension contribution (PATTERN weighted more)
+        # Rough dimension contribution (still weight middle more)
         dim_score = (
             dim_prog.layers[Layer.FACT].quality_score * 0.2 +
             dim_prog.layers[Layer.PATTERN].quality_score * 0.6 +
