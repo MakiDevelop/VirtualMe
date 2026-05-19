@@ -45,7 +45,7 @@ _FALLBACK_QUESTION = Question(
 )
 
 
-# === Layered Coverage Model (for real 8維 × 3層 progress) ===
+# === Layered Coverage Model (for real 8-dimension x 3-layer progress) ===
 
 @dataclass
 class LayerProgress:

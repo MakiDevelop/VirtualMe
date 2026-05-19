@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001,RUF002
 """
 Progress Card Renderer for LINE Flex Message
 
@@ -237,12 +238,6 @@ def render_progress_text(snapshot: "CoverageSnapshot") -> str:
     }
 
     LAYER_ORDER = [Layer.FACT, Layer.PATTERN, Layer.PRINCIPLE]
-    LAYER_NAME = {
-        Layer.FACT: "淺層",
-        Layer.PATTERN: "中層",
-        Layer.PRINCIPLE: "深層",
-    }
-
     lines = ["【目前訪談收集進度（八維 × 三層）】\n"]
 
     for dim in [Dimension.VOICE, Dimension.BOUNDARIES, Dimension.SOUL, Dimension.SKILL,

@@ -100,9 +100,9 @@ async def test_process_turn_status_query_reports_completion_progress(tmp_path):
 
     reply = await process_turn("u1", "萃取進度", object(), db, selector, settings)
 
-    assert "語氣・表達: 33%" in reply
-    assert "界線・原則: 100%" in reply
-    assert "目前最缺" in reply
+    assert "目前訪談收集進度" in reply
+    assert "聲音/表達" in reply
+    assert "界線/責任     淺層:●●○" in reply
 
 
 async def test_process_turn_restart_archives_old_run_and_starts_week_one(tmp_path):
@@ -352,7 +352,7 @@ async def test_status_query_after_pause_does_not_advance_question(tmp_path):
 
     reply = await process_turn("u1", "目前訪談的進度如何?", _Claude(), db, selector, settings)
 
-    assert "總完成度" in reply
+    assert "目前訪談收集進度" in reply
     assert "People question" not in reply
     assert await db.get_current_question_id(session.id) == "Q1"
 

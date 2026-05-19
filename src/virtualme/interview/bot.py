@@ -32,8 +32,8 @@ from virtualme.interview.session_lifecycle import (
 )
 from virtualme.interview.turn_reasoner import TurnReasoner
 from virtualme.interview.turn_reasoner_schema import BoundaryStatus, NextMove
-from virtualme.interview.turn_state import build_turn_state
-from virtualme.storage.db import DB, Dimension, Question, Session
+from virtualme.interview.turn_state import TurnState, build_turn_state
+from virtualme.storage.db import DB, Dimension, Layer, Question, Session
 from virtualme.subject import score_completeness
 
 logger = logging.getLogger(__name__)
@@ -46,11 +46,61 @@ DEFAULT_QUESTION = Question(
     energy_tax="low",
 )
 MAX_PROBES_PER_QUESTION = 2
+_LAYER_ORDER = {
+    Layer.FACT: 0,
+    Layer.PATTERN: 1,
+    Layer.PRINCIPLE: 2,
+}
 
 INTERVIEW_ERROR_REPLY = (
     "抱歉，我這邊剛才出了點狀況，麻煩你再說一次。"  # noqa: RUF001
     " (Sorry, something went wrong on my side — please try again.)"
 )
+
+
+def _reasoner_output_should_extract(reasoner_output: object) -> bool:
+    """Return whether the user answer should become evidence in the new reasoner path."""
+    if getattr(reasoner_output, "boundary_status", None) == BoundaryStatus.EXPLICIT_REFUSAL:
+        return False
+    return getattr(reasoner_output, "next_move", None) not in (
+        NextMove.ADDRESS_META,
+        NextMove.HONOR_SKIP,
+    )
+
+
+def _deeper_layer(current: Layer | None, candidate: Layer) -> Layer:
+    if current is None:
+        return candidate
+    return candidate if _LAYER_ORDER[candidate] > _LAYER_ORDER[current] else current
+
+
+def _fallback_next_reasoner_question(state: TurnState) -> Question | None:
+    """Pick a deterministic next question when the model says advance without an id.
+
+    This keeps the collection strategy from depending entirely on the model's
+    willingness to choose a target. Prefer the weakest shallow dimension that
+    still has an available candidate, then fall back to the next non-current
+    candidate in pool order.
+    """
+    candidates = [q for q in state.candidate_questions if q.id != state.current_question.id]
+    if not candidates:
+        return None
+
+    candidates_by_dimension: dict[Dimension, list[Question]] = {}
+    for question in candidates:
+        candidates_by_dimension.setdefault(question.dimension, []).append(question)
+
+    weak_dimensions: list[tuple[float, Dimension]] = []
+    for dimension, progress in state.coverage_snapshot.per_dimension.items():
+        if dimension not in candidates_by_dimension:
+            continue
+        shallow = progress.layers.get(Layer.FACT)
+        weak_dimensions.append((shallow.quality_score if shallow else 0.0, dimension))
+    weak_dimensions.sort(key=lambda item: item[0])
+
+    if weak_dimensions:
+        return candidates_by_dimension[weak_dimensions[0][1]][0]
+    return candidates[0]
 
 
 async def process_turn(
@@ -164,7 +214,12 @@ async def process_turn(
                 adaptive=settings.adaptive_extraction,
             )
 
-            reasoner = TurnReasoner(active_client)
+            reasoner_model = os.environ.get("REASONER_MODEL_NAME")
+            reasoner = (
+                TurnReasoner(active_client, model=reasoner_model)
+                if reasoner_model
+                else TurnReasoner(active_client)
+            )
             reasoner_output = await reasoner.run(turn_state)
 
             # Rich decision log — this is what we will watch to debug ghost-wall
@@ -183,13 +238,46 @@ async def process_turn(
             if reasoner_output.should_echo and reasoner_output.echo_content:
                 reply_text = f"{reasoner_output.echo_content}\n\n{reply_text}"
 
-            # Act on the reasoner's decision (MVP level)
-            if reasoner_output.next_move == NextMove.ADVANCE and reasoner_output.next_question_id:
-                await db.set_current_question_id(session.id, reasoner_output.next_question_id)
-                await db.record_question_asked(
-                    interviewee_id, reasoner_output.next_question_id, session.week
+            should_extract = _reasoner_output_should_extract(reasoner_output)
+            if should_extract:
+                extracted_anchors = await extract_anchors(
+                    user_turn, turn_state.current_question, active_client
                 )
-                logger.info("[NEW REASONER] advanced to question %s", reasoner_output.next_question_id)
+                deepest_layer = None
+                for anchor in extracted_anchors:
+                    deepest_layer = _deeper_layer(deepest_layer, anchor.layer)
+                    await db.save_anchor(
+                        interviewee_id,
+                        anchor.dimension,
+                        anchor.layer,
+                        anchor.content,
+                        anchor.source_turn_ids,
+                        anchor.source_question_ids,
+                        model=reasoner_model,
+                    )
+                if deepest_layer is not None:
+                    await db.record_question_answered(
+                        interviewee_id,
+                        turn_state.current_question.id,
+                        session.week,
+                        deepest_layer.value,
+                    )
+                logger.info(
+                    "[NEW REASONER] extracted %s anchors from %s",
+                    len(extracted_anchors),
+                    turn_state.current_question.id,
+                )
+
+            next_question_id = reasoner_output.next_question_id
+            if reasoner_output.next_move == NextMove.ADVANCE and not next_question_id:
+                next_question = _fallback_next_reasoner_question(turn_state)
+                next_question_id = next_question.id if next_question else None
+
+            # Act on the reasoner's decision.
+            if reasoner_output.next_move == NextMove.ADVANCE and next_question_id:
+                await db.set_current_question_id(session.id, next_question_id)
+                await db.record_question_asked(interviewee_id, next_question_id, session.week)
+                logger.info("[NEW REASONER] advanced to question %s", next_question_id)
 
             if reasoner_output.next_move == NextMove.HONOR_SKIP or reasoner_output.boundary_status == BoundaryStatus.EXPLICIT_REFUSAL:
                 logger.info("[NEW REASONER] honored skip / explicit refusal")

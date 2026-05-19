@@ -227,6 +227,10 @@ async def _apply_schema_migrations(conn: aiosqlite.Connection) -> None:
                 "archive_reason",
                 "ALTER TABLE anchors ADD COLUMN archive_reason TEXT",
             ),
+            (
+                "model",
+                "ALTER TABLE anchors ADD COLUMN model TEXT",
+            ),
             # v0.5+ anchor migrations append here
         ]
 
@@ -893,6 +897,7 @@ class DB:
         content: str,
         source_turn_ids: list[int],
         source_question_ids: list[str] | None = None,
+        model: str | None = None,
     ) -> Anchor:
         turn_ids = _dedupe_preserve_order(source_turn_ids)
         question_ids = _dedupe_preserve_order(
@@ -913,9 +918,9 @@ class DB:
                 """
                 INSERT INTO anchors(
                     interviewee_id, dimension, layer, content,
-                    triangulated, source_turn_ids, source_question_ids
+                    triangulated, source_turn_ids, source_question_ids, model
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     interviewee_id,
@@ -925,6 +930,7 @@ class DB:
                     int(triangulated),
                     json.dumps(turn_ids),
                     json.dumps(question_ids),
+                    model,
                 ),
             )
             await conn.commit()

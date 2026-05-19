@@ -1,5 +1,4 @@
 from enum import StrEnum
-from typing import Optional
 
 
 class BoundaryStatus(StrEnum):
@@ -26,6 +25,7 @@ class NextMove(StrEnum):
 
 class TurnReasonerOutput:
     """Simple container for reasoner output (no Pydantic to avoid extra_forbidden issues)"""
+
     def __init__(self, **kwargs):
         self.read = kwargs.get("read", "")
         self.boundary_status = kwargs.get("boundary_status", "none")

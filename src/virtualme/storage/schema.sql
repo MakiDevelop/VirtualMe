@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS anchors (
     active INTEGER NOT NULL DEFAULT 1,
     archived_at TEXT,
     archive_reason TEXT,
+    model TEXT,  -- 記錄產生此 anchor 的模型 (e.g. claude-3-5-haiku-20241022, claude-3-5-sonnet-20241022)
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     pii_tag TEXT
 );

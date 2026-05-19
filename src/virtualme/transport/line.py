@@ -11,7 +11,6 @@ from linebot.v3.messaging import (
     AsyncApiClient,
     AsyncMessagingApi,
     Configuration,
-    FlexContainer,
     FlexMessage,
     PushMessageRequest,
     ReplyMessageRequest,
@@ -170,7 +169,7 @@ async def _send_reply_or_push(
         except Exception as flex_exc:
             logger.error("LINE Flex reply failed for %s: %s", user_id, flex_exc)
             # fallback to text
-            reply = "目前進度卡片暫時無法顯示，已切換為文字模式。"
+            reply = "目前進度卡片暫時無法顯示, 已切換為文字模式。"
 
     # Normal text path
     try:
