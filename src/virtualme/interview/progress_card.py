@@ -12,6 +12,7 @@ Usage:
     flex_message = build_progress_flex(snapshot, trigger="user_asked")
 """
 
+from virtualme.interview.turn_state import CoverageSnapshot
 
 DIMENSION_LABELS = {
     "VOICE": "聲音 / 表達",
@@ -217,52 +218,56 @@ def get_progress_flex_for_user(
     return build_progress_flex(snapshot, trigger=trigger)
 
 
-def get_progress_text_for_user(
-    interviewee_id: str,
-    trigger: str = "user_asked",
-) -> str:
+def render_progress_text(snapshot: "CoverageSnapshot") -> str:
     """
-    Returns a clean text version of the progress report.
-    Used as reliable fallback while we stabilize the Flex Message sending.
+    Render a clean text progress report from a real CoverageSnapshot.
+    This is the version that shows actual data from the database.
     """
-    snapshot = {
-        "VOICE": {"shallow": 0.6, "middle": 0.25, "deep": 0.0},
-        "BOUNDARIES": {"shallow": 0.35, "middle": 0.05, "deep": 0.0},
-        "SOUL": {"shallow": 0.45, "middle": 0.15, "deep": 0.0},
-        "SKILL": {"shallow": 0.92, "middle": 0.68, "deep": 0.12},
-        "PEOPLE": {"shallow": 0.55, "middle": 0.28, "deep": 0.0},
-        "HISTORY": {"shallow": 0.78, "middle": 0.35, "deep": 0.0},
-        "JOURNAL": {"shallow": 0.22, "middle": 0.0, "deep": 0.0},
-        "STATE": {"shallow": 0.65, "middle": 0.18, "deep": 0.0},
-    }
+    from virtualme.storage.db import Dimension, Layer
 
     DIM_LABEL = {
-        "VOICE": "聲音/表達",
-        "BOUNDARIES": "界線/責任",
-        "SOUL": "靈魂/價值",
-        "SKILL": "專業技能",
-        "PEOPLE": "人際關係",
-        "HISTORY": "經歷/歷史",
-        "JOURNAL": "日誌/日常",
-        "STATE": "當下狀態",
+        Dimension.VOICE: "聲音/表達",
+        Dimension.BOUNDARIES: "界線/責任",
+        Dimension.SOUL: "靈魂/價值",
+        Dimension.SKILL: "專業技能",
+        Dimension.PEOPLE: "人際關係",
+        Dimension.HISTORY: "經歷/歷史",
+        Dimension.JOURNAL: "日誌/日常",
+        Dimension.STATE: "當下狀態",
+    }
+
+    LAYER_ORDER = [Layer.FACT, Layer.PATTERN, Layer.PRINCIPLE]
+    LAYER_NAME = {
+        Layer.FACT: "淺層",
+        Layer.PATTERN: "中層",
+        Layer.PRINCIPLE: "深層",
     }
 
     lines = ["【目前訪談收集進度（八維 × 三層）】\n"]
 
-    for dim, data in snapshot.items():
-        label = DIM_LABEL.get(dim, dim)
-        s = data["shallow"]
-        m = data["middle"]
-        d = data["deep"]
+    for dim in [Dimension.VOICE, Dimension.BOUNDARIES, Dimension.SOUL, Dimension.SKILL,
+                Dimension.PEOPLE, Dimension.HISTORY, Dimension.JOURNAL, Dimension.STATE]:
 
-        def fmt(x):
-            if x >= 0.8: return "●●●"
-            elif x >= 0.5: return "●●○"
-            elif x >= 0.2: return "●○○"
-            else: return "○○○"
+        dprog = snapshot.per_dimension.get(dim)
+        if not dprog:
+            lines.append(f"{DIM_LABEL.get(dim, dim.value):8}  資料不足")
+            continue
 
-        line = f"{label:8}  淺層:{fmt(s)}  中層:{fmt(m)}  深層:{fmt(d)}"
-        lines.append(line)
+        label = DIM_LABEL.get(dim, dim.value)
+
+        parts = []
+        for layer in LAYER_ORDER:
+            lp = dprog.layers.get(layer)
+            if lp and lp.quality_score >= 0.75:
+                parts.append("●●●")
+            elif lp and lp.quality_score >= 0.5:
+                parts.append("●●○")
+            elif lp and lp.quality_score >= 0.2:
+                parts.append("●○○")
+            else:
+                parts.append("○○○")
+
+        lines.append(f"{label:8}  淺層:{parts[0]}  中層:{parts[1]}  深層:{parts[2]}")
 
     lines.append("\n（只有當回答貢獻有意義的證據時才會推進）")
     lines.append("想繼續哪一塊或看更細的進度，告訴我即可。")
