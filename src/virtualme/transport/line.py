@@ -11,8 +11,8 @@ from linebot.v3.messaging import (
     AsyncApiClient,
     AsyncMessagingApi,
     Configuration,
+    FlexContainer,
     FlexMessage,
-    FlexMessageContents,
     PushMessageRequest,
     ReplyMessageRequest,
     TextMessage,
@@ -157,9 +157,10 @@ async def _send_reply_or_push(
     # Support Flex Message (progress card etc.)
     if isinstance(reply, dict) and reply.get("type") == "flex":
         try:
+            # More tolerant construction for different SDK versions
             flex_message = FlexMessage(
                 alt_text=reply.get("altText", "訪談進度"),
-                contents=FlexMessageContents(**reply["contents"]),
+                contents=reply["contents"],   # pass the bubble dict directly
             )
             await line_bot_api.reply_message(
                 ReplyMessageRequest(reply_token=reply_token, messages=[flex_message])
