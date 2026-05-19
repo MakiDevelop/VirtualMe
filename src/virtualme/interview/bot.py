@@ -29,6 +29,8 @@ from virtualme.interview.session_lifecycle import (
     is_persona_sufficient,
     is_session_closing,
 )
+from virtualme.interview.turn_reasoner import TurnReasoner
+from virtualme.interview.turn_state import build_turn_state
 from virtualme.storage.db import DB, Dimension, Question, Session
 from virtualme.subject import score_completeness
 
@@ -115,6 +117,28 @@ async def process_turn(
             db,
             selector,
         )
+
+    # === L2 TurnReasoner (whitelist-only safe rollout) ===
+    # Only the designated test users (e.g. Maki's own LINE id) go through the new reasoning engine.
+    # Everyone else (and special paths above) continue on the proven old path.
+    if getattr(settings, "reasoning_turn_enabled", False):
+        test_ids_raw = getattr(settings, "reasoning_test_user_ids", "") or ""
+        allowed = {x.strip() for x in test_ids_raw.split(",") if x.strip()}
+        if interviewee_id in allowed:
+            logger.info("[NEW REASONER] L2 path activated for %s", interviewee_id)
+            turn_state = await build_turn_state(
+                interviewee_id=interviewee_id,
+                db=db,
+                selector=selector,
+                session=session,
+                adaptive=settings.adaptive_extraction,
+            )
+            reasoner = TurnReasoner(active_client)
+            reasoner_output = await reasoner.run(turn_state)
+            # MVP: directly use the reply produced by the reasoner + Guardrail.
+            # Full next_move / echo / current_question update / reflection_note persistence come in follow-up iterations.
+            await db.save_turn(session.id, "assistant", reasoner_output.reply)
+            return reasoner_output.reply
 
     scrub_result = scrub_pii(incoming_message)
     if scrub_result.redactions:

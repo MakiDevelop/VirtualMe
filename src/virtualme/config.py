@@ -28,14 +28,6 @@ class Settings(BaseSettings):
         ),
     )
     max_extraction_rounds: int = Field(
-    reasoning_turn_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("reasoning_turn_enabled", "REASONING_TURN_ENABLED"),
-    )
-    reasoning_test_user_ids: str = Field(
-        default="",
-        validation_alias=AliasChoices("reasoning_test_user_ids", "REASONING_TEST_USER_IDS"),
-    )
         3,
         validation_alias=AliasChoices(
             "max_extraction_rounds",
@@ -72,14 +64,6 @@ class Settings(BaseSettings):
     persona_export_dir: str = Field(
         "./data/personas",
         validation_alias=AliasChoices("persona_export_dir", "VIRTUALME_PERSONA_EXPORT_DIR"),
-    )
-    reasoning_turn_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("reasoning_turn_enabled", "REASONING_TURN_ENABLED"),
-    )
-    reasoning_test_user_ids: str = Field(
-        default="",
-        validation_alias=AliasChoices("reasoning_test_user_ids", "REASONING_TEST_USER_IDS"),
     )
     reasoning_turn_enabled: bool = Field(
         default=False,
