@@ -1,5 +1,4 @@
 import logging
-import os
 import unicodedata
 
 from anthropic import AsyncAnthropic
@@ -214,7 +213,7 @@ async def process_turn(
                 adaptive=settings.adaptive_extraction,
             )
 
-            reasoner_model = os.environ.get("REASONER_MODEL_NAME")
+            reasoner_model = getattr(settings, "reasoner_model_name", None)
             reasoner = (
                 TurnReasoner(active_client, model=reasoner_model)
                 if reasoner_model
@@ -350,7 +349,7 @@ async def process_turn(
     if assessment.kind == TurnKind.SUFFICIENT:
         extracted_anchors = await extract_anchors(user_turn, current_question, active_client)
         for anchor in extracted_anchors:
-            model_name = os.environ.get("REASONER_MODEL_NAME")
+            model_name = getattr(settings, "reasoner_model_name", None)
             await db.save_anchor(
                 interviewee_id,
                 anchor.dimension,

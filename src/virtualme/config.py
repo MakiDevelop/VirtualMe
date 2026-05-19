@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("reasoning_test_user_ids", "REASONING_TEST_USER_IDS"),
     )
+    reasoner_model_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("reasoner_model_name", "REASONER_MODEL_NAME"),
+    )
     line_snapshot_export_enabled: bool = Field(
         False,
         validation_alias=AliasChoices(
