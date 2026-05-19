@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import Optional
 
@@ -25,14 +24,15 @@ class NextMove(StrEnum):
     SOFTEN = "soften"
 
 
-@dataclass
 class TurnReasonerOutput:
-    read: str
-    boundary_status: BoundaryStatus
-    engagement_state: EngagementState
-    next_move: NextMove
-    next_question_id: Optional[str]
-    should_echo: bool
-    echo_content: Optional[str]
-    reflection_note: Optional[str]
-    reply: str
+    """Simple container for reasoner output (no Pydantic to avoid extra_forbidden issues)"""
+    def __init__(self, **kwargs):
+        self.read = kwargs.get("read", "")
+        self.boundary_status = kwargs.get("boundary_status", "none")
+        self.engagement_state = kwargs.get("engagement_state", "engaged")
+        self.next_move = kwargs.get("next_move", "advance")
+        self.next_question_id = kwargs.get("next_question_id")
+        self.should_echo = kwargs.get("should_echo", False)
+        self.echo_content = kwargs.get("echo_content")
+        self.reflection_note = kwargs.get("reflection_note")
+        self.reply = kwargs.get("reply", "")
