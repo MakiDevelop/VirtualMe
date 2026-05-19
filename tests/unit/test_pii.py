@@ -44,6 +44,27 @@ def test_bare_numeric_range_not_treated_as_salary():
     assert "salary" not in detect_pii("we ran 100-150 experiments")
 
 
+def test_generic_company_word_not_redacted():
+    text = "我的工作價值對於公司代表什麼呢"
+    assert scrub_pii(text).scrubbed_text == text
+    assert "company" not in detect_pii(text)
+
+
+def test_formal_chinese_company_name_redacted():
+    text = "我在台灣積體電路製造股份有限公司上班"
+    assert "company" in detect_pii(text)
+    assert "[Company " in scrub_pii(text).scrubbed_text
+
+
+def test_english_company_redacted():
+    assert "company" in detect_pii("I joined Apple Inc. last year")
+
+
+def test_generic_english_company_word_not_redacted():
+    assert "company" not in detect_pii("I want to leave my company")
+    assert "company" not in detect_pii("the company is large")
+
+
 def test_age_bucketed():
     assert scrub_pii("She is 34 years old").scrubbed_text == "She is [Age 30s]"
 

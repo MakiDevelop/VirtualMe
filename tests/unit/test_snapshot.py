@@ -1,12 +1,16 @@
 from pydantic import ValidationError
 
+from virtualme.snapshot import render_behavior_profile
 from virtualme.snapshot.__main__ import main
 from virtualme.snapshot.core import (
     ConstructCard,
     EvidenceItem,
     _finalize_construct_card,
+    apply_construct_card_reviews,
     build_snapshot_bundle,
     export_snapshot,
+    export_snapshot_with_review,
+    load_construct_card_reviews,
     render_feedback_routing,
     render_mini_blind_test,
     render_soul_lite,
@@ -87,12 +91,175 @@ async def test_snapshot_exports_construct_cards_file(tmp_path):
     paths = await export_snapshot(db, "u1", tmp_path / "exports")
 
     assert {path.name for path in paths} == {
+        "behavior-profile.md",
         "construct-cards.md",
         "SOUL-lite.md",
         "mini-blind-test.md",
         "feedback-routing.md",
     }
     assert all(path.exists() for path in paths)
+
+
+async def test_snapshot_review_ingestion_raises_card_to_plausible(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+    review_path = tmp_path / "review.json"
+    review_path.write_text(
+        """
+        {
+          "reviews": [
+            {
+              "card_id": "C1",
+              "verdict": "like_me",
+              "reviewer": "Maki",
+              "reviewed_at": "2026-05-18",
+              "concrete_case": "Used the constraint triangle to renegotiate an impossible delivery plan.",
+              "exception_note": "Free discovery work can be an exception before the contract body.",
+              "pressure_note": "Pushed back when hidden scope creep appeared.",
+              "decision_tradeoff_note": "Trades short-term harmony for delivery realism.",
+              "evidence_quality": "medium_high",
+              "status_after_review": "plausible_after_human_review",
+              "confidence_level": "plausible",
+              "policy_status": "behavior_supported"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    paths = await export_snapshot_with_review(db, "u1", tmp_path / "exports", review_path)
+    output_dir = tmp_path / "exports" / "u1" / "snapshot"
+    cards = (output_dir / "construct-cards.md").read_text(encoding="utf-8")
+    summary = (output_dir / "construct-card-review-summary.md").read_text(encoding="utf-8")
+
+    assert {path.name for path in paths} == {
+        "behavior-profile.md",
+        "construct-cards.md",
+        "SOUL-lite.md",
+        "mini-blind-test.md",
+        "feedback-routing.md",
+        "construct-card-review-summary.md",
+    }
+    assert "- Confidence: plausible" in cards
+    assert "- Policy status: behavior_supported" in cards
+    assert "human review verdict=like_me" in cards
+    assert "exception" not in next(
+        line for line in cards.splitlines() if line.startswith("- Missing evidence:")
+    )
+    assert "| C1 | like_me | plausible | behavior_supported | medium_high |" in summary
+
+
+async def test_behavior_profile_renders_construct_card_as_narrative(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    text = render_behavior_profile(bundle)
+
+    assert "# 行為模式檔 v0" in text
+    assert "你描述自己" in text
+    assert "讀完之後" in text
+    assert "這像我嗎" in text
+    assert "Constraint triangle integrity" not in text
+
+
+async def test_behavior_profile_handles_empty_bundle(tmp_path):
+    db = await _new_db(tmp_path)
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    text = render_behavior_profile(bundle)
+
+    assert "訪談資料還不足" in text
+    assert "讀完之後" in text
+
+
+async def test_behavior_profile_included_in_export(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+
+    paths = await export_snapshot(db, "u1", tmp_path / "exports")
+    output_path = tmp_path / "exports" / "u1" / "snapshot" / "behavior-profile.md"
+
+    assert "behavior-profile.md" in {path.name for path in paths}
+    assert output_path.exists()
+    assert "# 行為模式檔 v0" in output_path.read_text(encoding="utf-8")
+
+
+async def test_behavior_profile_falls_back_to_hypotheses(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.VOICE,
+        Layer.PATTERN,
+        "speaks gently in meetings",
+        [1],
+        ["Q1"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    text = render_behavior_profile(bundle)
+
+    assert not bundle.construct_cards
+    assert bundle.hypotheses
+    assert "關於你在訪談裡提到的一件事" in text
+    assert "表達方式" in text
+
+
+async def test_markdown_review_ingestion_parses_persona_profile_style(tmp_path):
+    db = await _new_db(tmp_path)
+    await db.save_anchor(
+        "u1",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+    review_path = tmp_path / "profile.md"
+    review_path.write_text(
+        """
+        # Profile
+
+        Reviewer: Maki
+
+        ### C1 Constraint Triangle Integrity `confidence: plausible`
+        - **When** trouble happens
+        - 證據: Maki ratified this mechanism in the persona profile.
+        """,
+        encoding="utf-8",
+    )
+
+    reviews = load_construct_card_reviews(review_path)
+    bundle = apply_construct_card_reviews(await build_snapshot_bundle(db, "u1"), reviews)
+    card = bundle.construct_cards[0]
+
+    assert reviews[0].verdict == "like_me"
+    assert reviews[0].confidence_level == "plausible"
+    assert card.confidence_level == "plausible"
+    assert card.policy_status == "behavior_supported"
+    assert card.confidence_checks["human_reviewed"] is True
 
 
 async def test_mini_blind_test_and_feedback_routing_reference_hypotheses(tmp_path):
@@ -315,3 +482,57 @@ async def test_snapshot_cli_with_explicit_db_does_not_require_api_key(tmp_path, 
         raise AssertionError("explicit --db snapshot should not require Settings") from exc
 
     assert (tmp_path / "exports" / "local" / "snapshot" / "SOUL-lite.md").exists()
+
+
+async def test_snapshot_cli_accepts_review_artifact(tmp_path, monkeypatch):
+    db_path = tmp_path / "virtualme.db"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    db = DB(str(db_path))
+    await db.init()
+    await db.save_anchor(
+        "local",
+        Dimension.SKILL,
+        Layer.PRINCIPLE,
+        "uses project triangle language around budget scope and schedule",
+        [1],
+        ["Q1"],
+    )
+    review_path = tmp_path / "review.json"
+    review_path.write_text(
+        """
+        {
+          "reviews": [
+            {
+              "card_id": "C1",
+              "verdict": "like_me",
+              "confidence_level": "plausible",
+              "evidence_quality": "medium",
+              "status_after_review": "plausible_after_human_review"
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "virtualme.snapshot",
+            "--db",
+            f"sqlite:///{db_path}",
+            "--interviewee",
+            "local",
+            "--out",
+            str(tmp_path / "exports"),
+            "--review",
+            str(review_path),
+        ],
+    )
+
+    await main()
+
+    snapshot_dir = tmp_path / "exports" / "local" / "snapshot"
+    assert (snapshot_dir / "construct-card-review-summary.md").exists()
+    assert "plausible_after_human_review" in (
+        snapshot_dir / "construct-cards.md"
+    ).read_text(encoding="utf-8")

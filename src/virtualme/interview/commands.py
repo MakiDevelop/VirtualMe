@@ -119,7 +119,46 @@ class RestartRequest:
     """User asked to restart the whole extraction run."""
 
 
-InterviewCommand = StatusQuery | RetalkRequest | RestartRequest
+@dataclass
+class GenerateProfileRequest:
+    """User asked to export the current snapshot/persona draft."""
+
+
+@dataclass
+class RevokeKeyRequest:
+    """User asked to forget the stored Claude API key."""
+
+
+InterviewCommand = StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest | RevokeKeyRequest
+
+
+GENERATE_PROFILE_KEYWORDS = [
+    "產生人格檔",
+    "生成人格檔",
+    "匯出人格檔",
+    "輸出人格檔",
+    "產出人格檔",
+    "建立人格檔",
+    "產生 persona",
+    "生成 persona",
+    "export persona",
+    "generate profile",
+    "export profile",
+]
+
+
+REVOKE_KEY_KEYWORDS = [
+    "刪除 api key",
+    "刪除apikey",
+    "忘記 api key",
+    "移除 api key",
+    "撤銷 api key",
+    "刪除 claude key",
+    "忘記 claude key",
+    "delete api key",
+    "revoke api key",
+    "forget api key",
+]
 
 
 def _match_dimension(text: str) -> Dimension | None:
@@ -137,6 +176,10 @@ def detect_command(message: str) -> InterviewCommand | None:
     text = stripped.lower()
     if any(keyword in text for keyword in RESTART_KEYWORDS):
         return RestartRequest()
+    if any(keyword in text for keyword in REVOKE_KEY_KEYWORDS):
+        return RevokeKeyRequest()
+    if any(keyword in text for keyword in GENERATE_PROFILE_KEYWORDS):
+        return GenerateProfileRequest()
     if any(keyword in text for keyword in RETALK_KEYWORDS):
         return RetalkRequest(dimension=_match_dimension(text))
     if any(keyword in text for keyword in STATUS_KEYWORDS):
@@ -214,3 +257,13 @@ def format_restart_reply(archive_note: str, archived_counts: dict[str, int], fir
         f"triples {archived_counts['triples']}, sessions {archived_counts['sessions']}。\n"
         f"{first_question}"
     )
+
+
+def format_generate_profile_denied() -> str:
+    return "目前沒有開放 LINE 直接產生行為模式檔; 請由 Maki / operator 協助匯出。"
+
+
+def format_revoke_key_reply(removed: bool) -> str:
+    if removed:
+        return "已刪除這個 LINE 使用者綁定的 Claude API Key。之後若要繼續訪談, 需要重新提供 key。"
+    return "目前沒有找到這個 LINE 使用者已儲存的 Claude API Key。"

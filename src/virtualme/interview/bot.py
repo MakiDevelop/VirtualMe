@@ -1,5 +1,6 @@
 import logging
 import unicodedata
+from pathlib import Path
 
 from anthropic import AsyncAnthropic
 
@@ -9,13 +10,17 @@ from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
 from virtualme.interview.commands import (
     DIMENSION_LABELS,
+    GenerateProfileRequest,
     RestartRequest,
     RetalkRequest,
+    RevokeKeyRequest,
     StatusQuery,
     detect_command,
+    format_generate_profile_denied,
     format_restart_reply,
     format_retalk_needs_dimension,
     format_retalk_reply,
+    format_revoke_key_reply,
     format_status_reply,
 )
 from virtualme.interview.depth_evaluator import TurnKind, evaluate_depth
@@ -32,6 +37,7 @@ from virtualme.interview.session_lifecycle import (
 from virtualme.interview.turn_reasoner import TurnReasoner, load_system_prompt
 from virtualme.interview.turn_reasoner_schema import BoundaryStatus, NextMove
 from virtualme.interview.turn_state import TurnState, build_turn_state
+from virtualme.snapshot.core import export_snapshot
 from virtualme.storage.db import DB, Dimension, Layer, Question, Session
 from virtualme.subject import score_completeness
 
@@ -113,6 +119,20 @@ async def process_turn(
 ) -> str:
     settings = settings or Settings()
     active_client = claude
+    pre_gate_command = detect_command(incoming_message)
+    if isinstance(pre_gate_command, RevokeKeyRequest):
+        # Revocation is allowed before consent/BYOK so users can always remove
+        # a stored key without first accepting more data processing terms.
+        return _handle_revoke_key(interviewee_id, settings)
+    if settings.consent_required:
+        consent_reply = byok.run_consent_gate(
+            interviewee_id,
+            incoming_message,
+            settings.byok_keys_dir,
+            settings.byok_enabled,
+        )
+        if consent_reply is not None:
+            return consent_reply
     if settings.byok_enabled:
         # BYOK gate runs before session/scrub/save_turn/any LLM call.
         gate = await byok.run_byok_gate(interviewee_id, incoming_message, settings.byok_keys_dir)
@@ -152,7 +172,7 @@ async def process_turn(
         from virtualme.interview.progress_card import render_progress_text
         return render_progress_text(turn_state.coverage_snapshot)
 
-    command = detect_command(incoming_message)
+    command = pre_gate_command
     if is_session_closing(incoming_message):
         return await _close_session(
             interviewee_id,
@@ -474,6 +494,12 @@ async def _handle_non_answer(
         interviewee_id, current_question.id, session.week
     )
     if not is_meta:
+        # EVASION: 第一次給溫和 bridge(認可難度、給空間), 連續才 pause。
+        # 分類器必有誤判, runtime 不該讓一次 EVASION 判斷就停題。
+        if count < 2:
+            return await _gentle_evasion_bridge(
+                interviewee_id, current_question, active_client, db
+            )
         return _pause_current_question()
     if count < 2:
         return await _bridge_to_current_question(
@@ -517,6 +543,13 @@ async def _bridge_to_current_question(
         prefix = "可以，我先記下這點。"  # noqa: RUF001
     asked = await _final_reply(interviewee_id, question, claude, db)
     return f"{prefix}我們回到剛才這題。\n{asked}"
+
+
+async def _gentle_evasion_bridge(
+    interviewee_id: str, question: Question, claude: AsyncAnthropic, db: DB
+) -> str:
+    asked = await _final_reply(interviewee_id, question, claude, db)
+    return f"這題如果不好說, 可以慢慢來 —— 挑一個你想到的小片段講就好。\n{asked}"
 
 
 def _pause_current_question() -> str:
@@ -580,8 +613,13 @@ async def _handle_light_greeting(
     last_asked = await db.get_last_assistant_content(session.id)
     if last_asked:
         is_restart_resume = _is_restart_reply(last_asked)
+        raw_last_asked = last_asked
         last_asked = _clean_resume_question(last_asked)
-        if is_restart_resume or _has_unresolved_placeholder(last_asked):
+        if (
+            is_restart_resume
+            or _is_control_message(raw_last_asked)
+            or _has_unresolved_placeholder(last_asked)
+        ):
             rendered_question = await _final_reply(interviewee_id, question, active_client, db)
             reply = (
                 f"{progress_prefix}\n"
@@ -617,11 +655,32 @@ def _clean_resume_question(content: str) -> str:
         return cleaned.split("\n", 1)[-1].strip()
     if cleaned.startswith("我們先回到剛才這題。"):
         return cleaned.split("\n", 1)[-1].strip()
+    if cleaned.startswith("這題如果不好說"):
+        return cleaned.split("\n", 1)[-1].strip()
     return cleaned
 
 
 def _is_restart_reply(content: str) -> bool:
     return content.strip().startswith("好, 我會從頭開始萃取。")
+
+
+def _is_control_message(content: str) -> bool:
+    cleaned = content.strip()
+    exact_control_messages = {
+        _pause_current_question(),
+        "好，今天先到這裡。我會把這段先整理起來。",  # noqa: RUF001
+        INTERVIEW_ERROR_REPLY,
+        format_retalk_needs_dimension(),
+        format_generate_profile_denied(),
+        "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。",
+    }
+    if cleaned in exact_control_messages:
+        return True
+    return (
+        _is_restart_reply(cleaned)
+        or cleaned.startswith("我們現在正在收集的人格維度是【")
+        or cleaned.startswith("行為模式檔 v0")
+    )
 
 
 def _has_unresolved_placeholder(content: str) -> bool:
@@ -664,7 +723,7 @@ async def _auto_export_if_sufficient(
 
 
 async def _handle_command(
-    command: StatusQuery | RetalkRequest | RestartRequest,
+    command: StatusQuery | RetalkRequest | RestartRequest | GenerateProfileRequest | RevokeKeyRequest,
     interviewee_id: str,
     incoming_message: str,
     session: Session,
@@ -674,6 +733,22 @@ async def _handle_command(
     settings: Settings,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
+    if isinstance(command, GenerateProfileRequest):
+        scrub_result = scrub_pii(incoming_message)
+        user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+        await db.save_redactions(user_turn.id, scrub_result.redactions)
+        reply = await _handle_generate_profile(interviewee_id, db, settings)
+        await db.save_turn(session.id, "assistant", reply)
+        return reply
+
+    if isinstance(command, RevokeKeyRequest):
+        scrub_result = scrub_pii(incoming_message)
+        user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+        await db.save_redactions(user_turn.id, scrub_result.redactions)
+        reply = _handle_revoke_key(interviewee_id, settings)
+        await db.save_turn(session.id, "assistant", reply)
+        return reply
+
     if isinstance(command, RestartRequest):
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
@@ -703,6 +778,65 @@ async def _handle_command(
     await db.save_redactions(user_turn.id, scrub_result.redactions)
     await db.save_turn(session.id, "assistant", reply)
     return reply
+
+
+async def _handle_generate_profile(
+    interviewee_id: str,
+    db: DB,
+    settings: Settings,
+) -> str:
+    if not _line_snapshot_export_allowed(interviewee_id, settings):
+        return format_generate_profile_denied()
+    try:
+        paths = await export_snapshot(db, interviewee_id, Path(settings.snapshot_export_dir))
+    except Exception as exc:
+        logger.exception("Snapshot export failed for %s: %s", interviewee_id, exc)
+        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
+    behavior_profile = next((path for path in paths if path.name == "behavior-profile.md"), None)
+    if behavior_profile is None:
+        logger.error("Snapshot export for %s did not include behavior-profile.md", interviewee_id)
+        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
+    return _behavior_profile_for_line(behavior_profile.read_text(encoding="utf-8"))
+
+
+def _behavior_profile_for_line(markdown: str) -> str:
+    lines = []
+    for line in markdown.splitlines():
+        heading_marks = len(line) - len(line.lstrip("#"))
+        if 1 <= heading_marks <= 6 and len(line) > heading_marks and line[heading_marks] == " ":
+            line = line[heading_marks + 1 :]
+        if line.startswith("> "):
+            line = line[2:]
+        elif line.startswith(">"):
+            line = line[1:]
+        if (
+            len(line) >= 2
+            and line.startswith("_")
+            and line.endswith("_")
+            and not line.startswith("__")
+            and not line.endswith("__")
+        ):
+            line = line[1:-1]
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _line_snapshot_export_allowed(interviewee_id: str, settings: Settings) -> bool:
+    if not settings.line_snapshot_export_enabled:
+        return False
+    allowed = {
+        item.strip()
+        for item in settings.line_snapshot_export_user_ids.split(",")
+        if item.strip()
+    }
+    if settings.owner_line_user_id:
+        allowed.add(settings.owner_line_user_id)
+    return interviewee_id in allowed
+
+
+def _handle_revoke_key(interviewee_id: str, settings: Settings) -> str:
+    removed = byok.delete_key(settings.byok_keys_dir, interviewee_id)
+    return format_revoke_key_reply(removed)
 
 
 async def _handle_restart(
@@ -778,11 +912,11 @@ async def _resolve_current_question(
 ) -> Question:
     base = await _current_pool_question(db, selector, session_id, week)
     last_asked = await db.get_last_assistant_content(session_id)
-    if last_asked:
+    if last_asked and not _is_control_message(last_asked):
         # The previous bot turn is what the current answer actually responds to
         # (a pool question OR a generated follow-up). Keep the pool question id
         # for triangulation; reflect the real wording for depth/anchor context.
-        return base.model_copy(update={"text": last_asked})
+        return base.model_copy(update={"text": _clean_resume_question(last_asked)})
     return base
 
 
