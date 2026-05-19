@@ -73,6 +73,20 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("reasoning_test_user_ids", "REASONING_TEST_USER_IDS"),
     )
+    line_snapshot_export_enabled: bool = Field(
+        False,
+        validation_alias=AliasChoices(
+            "line_snapshot_export_enabled",
+            "VIRTUALME_LINE_SNAPSHOT_EXPORT_ENABLED",
+        ),
+    )
+    line_snapshot_export_user_ids: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "line_snapshot_export_user_ids",
+            "VIRTUALME_LINE_SNAPSHOT_EXPORT_USER_IDS",
+        ),
+    )
 
 
 def sqlite_path(database_url: str) -> str:
