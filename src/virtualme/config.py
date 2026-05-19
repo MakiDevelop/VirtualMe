@@ -77,6 +77,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("reasoner_model_name", "REASONER_MODEL_NAME"),
     )
+    reasoner_prompt_file: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("reasoner_prompt_file", "REASONER_PROMPT_FILE"),
+    )
     line_snapshot_export_enabled: bool = Field(
         False,
         validation_alias=AliasChoices(

@@ -16,9 +16,10 @@ build/
 
 # Environment
 .env
+.env*
+!.env.example
 .env.local
 .env.*.local
-!.env.example
 
 # SQLite databases (local data)
 *.db
@@ -47,6 +48,7 @@ Thumbs.db
 # Never commit actual interview transcripts or extracted SOUL/VOICE/SKILL files
 artifacts/
 transcripts/
+exports/
 *.transcript.md
 SOUL-*.md
 VOICE-*.md
@@ -67,6 +69,10 @@ STATE-*.md
 
 # Internal working dir (not for public)
 concept-for-chatgpt-diagram.md
+GEMINI.md
+docs/design/
+.private/
+private/
 
 # Claude Code local settings (operator-specific MCP refs, not for public)
 .claude/

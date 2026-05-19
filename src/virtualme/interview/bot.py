@@ -29,7 +29,7 @@ from virtualme.interview.session_lifecycle import (
     is_persona_sufficient,
     is_session_closing,
 )
-from virtualme.interview.turn_reasoner import TurnReasoner
+from virtualme.interview.turn_reasoner import TurnReasoner, load_system_prompt
 from virtualme.interview.turn_reasoner_schema import BoundaryStatus, NextMove
 from virtualme.interview.turn_state import TurnState, build_turn_state
 from virtualme.storage.db import DB, Dimension, Layer, Question, Session
@@ -214,10 +214,11 @@ async def process_turn(
             )
 
             reasoner_model = getattr(settings, "reasoner_model_name", None)
+            reasoner_prompt = load_system_prompt(getattr(settings, "reasoner_prompt_file", None))
             reasoner = (
-                TurnReasoner(active_client, model=reasoner_model)
+                TurnReasoner(active_client, model=reasoner_model, system_prompt=reasoner_prompt)
                 if reasoner_model
-                else TurnReasoner(active_client)
+                else TurnReasoner(active_client, system_prompt=reasoner_prompt)
             )
             reasoner_output = await reasoner.run(turn_state)
 
