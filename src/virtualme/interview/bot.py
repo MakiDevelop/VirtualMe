@@ -1,11 +1,11 @@
 import logging
 import unicodedata
-from pathlib import Path
 
 from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
 from virtualme.export.auto import auto_export_persona
+from virtualme.export.persona_package import build_persona_export_package
 from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
 from virtualme.interview.commands import (
@@ -28,6 +28,10 @@ from virtualme.interview.follow_up import generate_follow_up, select_rule
 from virtualme.interview.lang import INTERVIEW_OUTPUT_LANGUAGE
 from virtualme.interview.models import MODEL_DEEP, create_message
 from virtualme.interview.pii import scrub_pii
+from virtualme.interview.progress_card import (
+    calculate_weighted_completion,
+    render_8x3_progress_card,
+)
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.interview.session_lifecycle import (
     finalize_session_if_closing,
@@ -36,8 +40,7 @@ from virtualme.interview.session_lifecycle import (
 )
 from virtualme.interview.turn_reasoner import TurnReasoner, load_system_prompt
 from virtualme.interview.turn_reasoner_schema import BoundaryStatus, NextMove
-from virtualme.interview.turn_state import TurnState, build_turn_state
-from virtualme.snapshot.core import export_snapshot
+from virtualme.interview.turn_state import TurnState, build_turn_state, compute_coverage_snapshot
 from virtualme.storage.db import DB, Dimension, Layer, Question, Session
 from virtualme.subject import score_completeness
 
@@ -61,6 +64,21 @@ INTERVIEW_ERROR_REPLY = (
     "抱歉，我這邊剛才出了點狀況，麻煩你再說一次。"  # noqa: RUF001
     " (Sorry, something went wrong on my side — please try again.)"
 )
+
+
+class PersonaExportLineReply(str):
+    """Text reply plus local zip artifact metadata for LINE transport."""
+
+    zip_path: str
+    file_name: str
+    caption: str
+
+    def __new__(cls, text: str, *, zip_path: str, file_name: str, caption: str):
+        obj = str.__new__(cls, text)
+        obj.zip_path = zip_path
+        obj.file_name = file_name
+        obj.caption = caption
+        return obj
 
 
 def _reasoner_output_should_extract(reasoner_output: object) -> bool:
@@ -169,8 +187,7 @@ async def process_turn(
             adaptive=settings.adaptive_extraction,
         )
 
-        from virtualme.interview.progress_card import render_progress_text
-        return render_progress_text(turn_state.coverage_snapshot)
+        return render_8x3_progress_card(turn_state.coverage_snapshot)
 
     command = pre_gate_command
     if is_session_closing(incoming_message):
@@ -785,53 +802,47 @@ async def _handle_generate_profile(
     db: DB,
     settings: Settings,
 ) -> str:
-    if not _line_snapshot_export_allowed(interviewee_id, settings):
+    if settings.byok_enabled and not byok.has_key(settings.byok_keys_dir, interviewee_id):
         return format_generate_profile_denied()
+
+    anchors = await db.load_anchors_summary(interviewee_id)
+    if not is_persona_sufficient(0, 1, anchors):
+        return format_generate_profile_denied()
+
+    snapshot = compute_coverage_snapshot(anchors)
     try:
-        paths = await export_snapshot(db, interviewee_id, Path(settings.snapshot_export_dir))
+        progress_card = render_8x3_progress_card(snapshot)
+        completion = calculate_weighted_completion(snapshot)
     except Exception as exc:
-        logger.exception("Snapshot export failed for %s: %s", interviewee_id, exc)
-        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
-    behavior_profile = next((path for path in paths if path.name == "behavior-profile.md"), None)
-    if behavior_profile is None:
-        logger.error("Snapshot export for %s did not include behavior-profile.md", interviewee_id)
-        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
-    return _behavior_profile_for_line(behavior_profile.read_text(encoding="utf-8"))
+        logger.exception("Progress card rendering failed for %s: %s", interviewee_id, exc)
+        progress_card = ""
+        completion = 0
 
+    try:
+        package = await build_persona_export_package(
+            db,
+            interviewee_id,
+            settings.persona_export_dir,
+            snapshot,
+        )
+    except Exception as exc:
+        logger.exception("Persona export zip failed for %s: %s", interviewee_id, exc)
+        return "人格檔 zip 產生失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
 
-def _behavior_profile_for_line(markdown: str) -> str:
-    lines = []
-    for line in markdown.splitlines():
-        heading_marks = len(line) - len(line.lstrip("#"))
-        if 1 <= heading_marks <= 6 and len(line) > heading_marks and line[heading_marks] == " ":
-            line = line[heading_marks + 1 :]
-        if line.startswith("> "):
-            line = line[2:]
-        elif line.startswith(">"):
-            line = line[1:]
-        if (
-            len(line) >= 2
-            and line.startswith("_")
-            and line.endswith("_")
-            and not line.startswith("__")
-            and not line.endswith("__")
-        ):
-            line = line[1:-1]
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def _line_snapshot_export_allowed(interviewee_id: str, settings: Settings) -> bool:
-    if not settings.line_snapshot_export_enabled:
-        return False
-    allowed = {
-        item.strip()
-        for item in settings.line_snapshot_export_user_ids.split(",")
-        if item.strip()
-    }
-    if settings.owner_line_user_id:
-        allowed.add(settings.owner_line_user_id)
-    return interviewee_id in allowed
+    text = "\n\n".join(
+        part
+        for part in [
+            progress_card,
+            f"你目前訪談總完成度約 {completion}%。已為你產生目前版本的人格檔 zip。",
+        ]
+        if part
+    )
+    return PersonaExportLineReply(
+        text,
+        zip_path=str(package.zip_path),
+        file_name=package.file_name,
+        caption=package.caption,
+    )
 
 
 def _handle_revoke_key(interviewee_id: str, settings: Settings) -> str:

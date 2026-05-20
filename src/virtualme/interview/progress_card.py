@@ -14,6 +14,7 @@ Usage:
 """
 
 from virtualme.interview.turn_state import CoverageSnapshot
+from virtualme.storage.db import Dimension, Layer
 
 DIMENSION_LABELS = {
     "VOICE": "聲音 / 表達",
@@ -268,3 +269,95 @@ def render_progress_text(snapshot: "CoverageSnapshot") -> str:
     lines.append("想繼續哪一塊或看更細的進度，告訴我即可。")
 
     return "\n".join(lines)
+
+
+_DIMENSION_ORDER = [
+    Dimension.VOICE,
+    Dimension.BOUNDARIES,
+    Dimension.SOUL,
+    Dimension.SKILL,
+    Dimension.PEOPLE,
+    Dimension.HISTORY,
+    Dimension.JOURNAL,
+    Dimension.STATE,
+]
+_DIMENSION_LABELS_TEXT = {
+    Dimension.VOICE: "聲音/表達",
+    Dimension.BOUNDARIES: "界線/責任",
+    Dimension.SOUL: "靈魂/價值",
+    Dimension.SKILL: "專業技能",
+    Dimension.PEOPLE: "人際關係",
+    Dimension.HISTORY: "經歷/歷史",
+    Dimension.JOURNAL: "日誌/日常",
+    Dimension.STATE: "當下狀態",
+}
+_LAYER_WEIGHTS = {
+    Layer.FACT: 0.15,
+    Layer.PATTERN: 0.35,
+    Layer.PRINCIPLE: 0.50,
+}
+
+
+def calculate_weighted_completion(snapshot: CoverageSnapshot) -> int:
+    """Weighted average completion: shallow 15%, middle 35%, deep 50%."""
+    if not snapshot.per_dimension:
+        return 0
+    total = 0.0
+    for dimension in Dimension:
+        progress = snapshot.per_dimension.get(dimension)
+        if progress is None:
+            continue
+        total += sum(
+            (progress.layers.get(layer).quality_score if progress.layers.get(layer) else 0.0)
+            * weight
+            for layer, weight in _LAYER_WEIGHTS.items()
+        )
+    return round((total / len(Dimension)) * 100)
+
+
+def render_8x3_progress_card(snapshot: CoverageSnapshot) -> str:
+    """Render the user-facing 8 dimensions x 3 layers progress card."""
+    lines = ["VirtualMe 訪談機器人 【目前訪談收集進度（八維 × 三層）】", ""]
+    for dimension in _DIMENSION_ORDER:
+        progress = snapshot.per_dimension.get(dimension)
+        parts = []
+        for layer in [Layer.FACT, Layer.PATTERN, Layer.PRINCIPLE]:
+            layer_progress = progress.layers.get(layer) if progress else None
+            parts.append(_dots(layer_progress.quality_score if layer_progress else 0.0))
+        lines.append(
+            f"{_DIMENSION_LABELS_TEXT[dimension]:8}  "
+            f"淺層:{parts[0]}  中層:{parts[1]}  深層:{parts[2]}"
+        )
+    return "\n".join(lines)
+
+
+def render_coverage_summary(snapshot: CoverageSnapshot) -> str:
+    """Text version for export notes."""
+    return render_8x3_progress_card(snapshot)
+
+
+def weakest_dimension_labels(snapshot: CoverageSnapshot, limit: int = 3) -> list[str]:
+    ranked: list[tuple[float, Dimension]] = []
+    for dimension in Dimension:
+        progress = snapshot.per_dimension.get(dimension)
+        if progress is None:
+            ranked.append((0.0, dimension))
+            continue
+        score = sum(
+            (progress.layers.get(layer).quality_score if progress.layers.get(layer) else 0.0)
+            * weight
+            for layer, weight in _LAYER_WEIGHTS.items()
+        )
+        ranked.append((score, dimension))
+    ranked.sort(key=lambda item: item[0])
+    return [_DIMENSION_LABELS_TEXT[dimension] for _, dimension in ranked[:limit]]
+
+
+def _dots(score: float) -> str:
+    if score >= 0.75:
+        return "●●●"
+    if score >= 0.5:
+        return "●●○"
+    if score >= 0.2:
+        return "●○○"
+    return "○○○"

@@ -152,6 +152,15 @@ async def _send_reply_or_push(
     reply: str | dict,
 ) -> bool:
     token_hint = reply_token[:8]
+    zip_path = getattr(reply, "zip_path", None)
+    zip_caption = getattr(reply, "caption", None)
+    if zip_path:
+        logger.warning(
+            "Persona zip artifact is ready for %s at %s, but LINE Messaging API "
+            "does not support arbitrary file/zip send messages; sending text reply only.",
+            user_id,
+            zip_path,
+        )
 
     # Support Flex Message (progress card etc.)
     if isinstance(reply, dict) and reply.get("type") == "flex":
@@ -176,17 +185,19 @@ async def _send_reply_or_push(
         await line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=reply_token,
-                messages=[TextMessage(text=reply)],
+                messages=[TextMessage(text=str(reply))],
             )
         )
         logger.info("LINE reply sent with token %s", token_hint)
+        if zip_path and zip_caption:
+            logger.info("Persona zip caption for %s: %s", user_id, zip_caption)
         return True
     except Exception as reply_exc:
         logger.error("LINE reply failed for %s with token %s: %s", user_id, token_hint, reply_exc)
 
     try:
         await line_bot_api.push_message(
-            PushMessageRequest(to=user_id, messages=[TextMessage(text=reply)])
+            PushMessageRequest(to=user_id, messages=[TextMessage(text=str(reply))])
         )
         logger.info("LINE push fallback sent for %s after token %s failed", user_id, token_hint)
         return True

@@ -303,3 +303,10 @@ def _compute_coverage_snapshot(
         snapshot.overall_completion = round(total_score_sum / dim_count, 2)
 
     return snapshot
+
+
+def compute_coverage_snapshot(
+    anchors_summary: dict[Dimension, list[Anchor]],
+) -> CoverageSnapshot:
+    """Public wrapper for callers that need current 8x3 coverage outside TurnState."""
+    return _compute_coverage_snapshot(anchors_summary)

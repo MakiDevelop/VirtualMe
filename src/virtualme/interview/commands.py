@@ -260,7 +260,7 @@ def format_restart_reply(archive_note: str, archived_counts: dict[str, int], fir
 
 
 def format_generate_profile_denied() -> str:
-    return "目前沒有開放 LINE 直接產生行為模式檔; 請由 Maki / operator 協助匯出。"
+    return "目前VM對你的認識還不夠，請多與VM再訪談一陣子喔"  # noqa: RUF001
 
 
 def format_revoke_key_reply(removed: bool) -> str:
