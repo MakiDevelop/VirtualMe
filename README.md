@@ -2,6 +2,21 @@
 
 > 把一個人**萃取**成 AI 代理人——用 8 週訪談，不用填表。
 
+**Current release: v1.1.0** — baseline interview + coverage tracking + persona markdown export 之上，補上 Constitution v1.1（六條 Stability & Restraint Principles）與對應的 M1 hard gates。
+
+### v1.1.0 Highlights
+
+- **[Constitution v1.1](specs/11-constitution.md)** — 七位一體 council 2026-05-20 ratified；把先前散落於 `docs/TRUNK.md` / `specs/05` / milestone 的「謹慎、克制、有敬畏」立場 codify 為六條：P1 State-Trait Separation / P2 Contradiction Preservation / P3 Reflective Restraint / P4 Multi-Session Validation / P5 Self-Correction & Agency / P6 Provenance, Confidence & Temporal Decay
+- **訪談 reasoning engine 重構** — L0 transport idempotency fail-closed + L1 TurnState 只讀狀態物件 + L2 `turn_reasoner.decide_and_reply()` + Guardrail + feature flag (`reasoning_turn_enabled`) whitelist rollout
+- **使用者自助匯出人格檔 + 下載連結**
+- **M1 hard gate detectors（4 條）+ 115 contract tests**：
+  - P3 — `SkipStopReason` enum + Guardrail metadata + reflection_note no-leak
+  - P5 — `hedge_validator`（8 forbidden patterns / 12 hedge markers）+ unlike_me regression
+  - P1 — `stability_gate.is_eligible_for_core_truths()`（STATE 不進 Core Truths）
+  - P4 — `multi_session_validator.can_be_validated()`（single-session 不得 validated）
+
+> M2 將把 detector wire 進 build_snapshot_bundle / export pipeline；本版只交付 detector + contract test 鎖住 invariant。詳見 `specs/11-constitution.md` §M2/M3。
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![English](https://img.shields.io/badge/Lang-English-red.svg)](README.en.md)
@@ -89,6 +104,11 @@ VirtualMe 把這個發現延伸成可上線的 pipeline：
 
 匯出時會再次 scrub anchor 內容中的 PII；`interviewee_id`、資料夾名與 archive metadata 不會被改名，請不要用 email / 真名當 interviewee id。
 
+v1.0.0 的輸出包含兩種層級：
+
+- **Raw archive**：`python -m virtualme.export` 產生 8 個 dimension markdown、入口檔與 manifest。
+- **Review draft**：可依 anchors 人工整理成 `SOUL.md` / `VOICE.md` / `SKILL.md` / `PEOPLE.md` / `HISTORY.md` / `JOURNAL.md` / `BOUNDARIES.md` / `STATE.md` 八份可讀人格檔，用於「像 / 不像 / 缺例子」review。
+
 加上一個可用的 agent endpoint，可以：
 - 起草給客戶 / 候選人 / 同事的訊息
 - 用你的語氣回覆公開貼文
@@ -157,6 +177,15 @@ python scripts/init_db.py --path ./data/virtualme.db
 
 # Phase 0：CLI 跑一輪訪談（不接 LINE）
 python -m virtualme.cli --interviewee yourself
+```
+
+### LINE dogfood
+
+v1.0.0 的 LINE path 可用 feature flag 開啟 supervised dogfood。新路徑會在每輪訪談後寫入 anchors，讓「進度」查詢顯示真實 coverage。
+
+```env
+REASONING_TURN_ENABLED=true
+REASONING_TEST_USER_IDS=<your-line-user-id>
 ```
 
 ### 本機 demo flow

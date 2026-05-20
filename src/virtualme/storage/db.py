@@ -227,6 +227,10 @@ async def _apply_schema_migrations(conn: aiosqlite.Connection) -> None:
                 "archive_reason",
                 "ALTER TABLE anchors ADD COLUMN archive_reason TEXT",
             ),
+            (
+                "model",
+                "ALTER TABLE anchors ADD COLUMN model TEXT",
+            ),
             # v0.5+ anchor migrations append here
         ]
 
@@ -284,6 +288,47 @@ async def _apply_schema_migrations(conn: aiosqlite.Connection) -> None:
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS persona_download_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_hash TEXT NOT NULL UNIQUE,
+            interviewee_id TEXT NOT NULL,
+            zip_path TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            download_count INTEGER NOT NULL DEFAULT 0,
+            last_downloaded_at TEXT
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_persona_download_tokens_expires_at
+        ON persona_download_tokens(expires_at)
+        """
+    )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS persona_download_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            interviewee_id TEXT,
+            token_hash TEXT NOT NULL,
+            requested_at TEXT NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            success INTEGER NOT NULL,
+            failure_reason TEXT,
+            zip_path TEXT
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_persona_download_logs_token_hash
+        ON persona_download_logs(token_hash)
         """
     )
 
@@ -893,6 +938,7 @@ class DB:
         content: str,
         source_turn_ids: list[int],
         source_question_ids: list[str] | None = None,
+        model: str | None = None,
     ) -> Anchor:
         turn_ids = _dedupe_preserve_order(source_turn_ids)
         question_ids = _dedupe_preserve_order(
@@ -913,9 +959,9 @@ class DB:
                 """
                 INSERT INTO anchors(
                     interviewee_id, dimension, layer, content,
-                    triangulated, source_turn_ids, source_question_ids
+                    triangulated, source_turn_ids, source_question_ids, model
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     interviewee_id,
@@ -925,6 +971,7 @@ class DB:
                     int(triangulated),
                     json.dumps(turn_ids),
                     json.dumps(question_ids),
+                    model,
                 ),
             )
             await conn.commit()

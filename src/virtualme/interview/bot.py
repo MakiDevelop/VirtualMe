@@ -1,11 +1,12 @@
 import logging
 import unicodedata
-from pathlib import Path
 
 from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
 from virtualme.export.auto import auto_export_persona
+from virtualme.export.download_tokens import build_download_url, create_download_token
+from virtualme.export.persona_package import build_persona_export_package
 from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
 from virtualme.interview.commands import (
@@ -28,14 +29,20 @@ from virtualme.interview.follow_up import generate_follow_up, select_rule
 from virtualme.interview.lang import INTERVIEW_OUTPUT_LANGUAGE
 from virtualme.interview.models import MODEL_DEEP, create_message
 from virtualme.interview.pii import scrub_pii
+from virtualme.interview.progress_card import (
+    calculate_weighted_completion,
+    render_8x3_progress_card,
+)
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.interview.session_lifecycle import (
     finalize_session_if_closing,
     is_persona_sufficient,
     is_session_closing,
 )
-from virtualme.snapshot.core import export_snapshot
-from virtualme.storage.db import DB, Dimension, Question, Session
+from virtualme.interview.turn_reasoner import TurnReasoner, load_system_prompt
+from virtualme.interview.turn_reasoner_schema import BoundaryStatus, NextMove
+from virtualme.interview.turn_state import TurnState, build_turn_state, compute_coverage_snapshot
+from virtualme.storage.db import DB, Dimension, Layer, Question, Session
 from virtualme.subject import score_completeness
 
 logger = logging.getLogger(__name__)
@@ -48,11 +55,76 @@ DEFAULT_QUESTION = Question(
     energy_tax="low",
 )
 MAX_PROBES_PER_QUESTION = 2
+_LAYER_ORDER = {
+    Layer.FACT: 0,
+    Layer.PATTERN: 1,
+    Layer.PRINCIPLE: 2,
+}
 
 INTERVIEW_ERROR_REPLY = (
     "抱歉，我這邊剛才出了點狀況，麻煩你再說一次。"  # noqa: RUF001
     " (Sorry, something went wrong on my side — please try again.)"
 )
+
+
+class PersonaExportLineReply(str):
+    """Text reply plus local zip artifact metadata for LINE transport."""
+
+    zip_path: str
+    file_name: str
+    caption: str
+
+    def __new__(cls, text: str, *, zip_path: str, file_name: str, caption: str):
+        obj = str.__new__(cls, text)
+        obj.zip_path = zip_path
+        obj.file_name = file_name
+        obj.caption = caption
+        return obj
+
+
+def _reasoner_output_should_extract(reasoner_output: object) -> bool:
+    """Return whether the user answer should become evidence in the new reasoner path."""
+    if getattr(reasoner_output, "boundary_status", None) == BoundaryStatus.EXPLICIT_REFUSAL:
+        return False
+    return getattr(reasoner_output, "next_move", None) not in (
+        NextMove.ADDRESS_META,
+        NextMove.HONOR_SKIP,
+    )
+
+
+def _deeper_layer(current: Layer | None, candidate: Layer) -> Layer:
+    if current is None:
+        return candidate
+    return candidate if _LAYER_ORDER[candidate] > _LAYER_ORDER[current] else current
+
+
+def _fallback_next_reasoner_question(state: TurnState) -> Question | None:
+    """Pick a deterministic next question when the model says advance without an id.
+
+    This keeps the collection strategy from depending entirely on the model's
+    willingness to choose a target. Prefer the weakest shallow dimension that
+    still has an available candidate, then fall back to the next non-current
+    candidate in pool order.
+    """
+    candidates = [q for q in state.candidate_questions if q.id != state.current_question.id]
+    if not candidates:
+        return None
+
+    candidates_by_dimension: dict[Dimension, list[Question]] = {}
+    for question in candidates:
+        candidates_by_dimension.setdefault(question.dimension, []).append(question)
+
+    weak_dimensions: list[tuple[float, Dimension]] = []
+    for dimension, progress in state.coverage_snapshot.per_dimension.items():
+        if dimension not in candidates_by_dimension:
+            continue
+        shallow = progress.layers.get(Layer.FACT)
+        weak_dimensions.append((shallow.quality_score if shallow else 0.0, dimension))
+    weak_dimensions.sort(key=lambda item: item[0])
+
+    if weak_dimensions:
+        return candidates_by_dimension[weak_dimensions[0][1]][0]
+    return candidates[0]
 
 
 async def process_turn(
@@ -63,6 +135,7 @@ async def process_turn(
     selector: QuestionSelector,
     settings: Settings | None = None,
     override_week: int | None = None,
+    download_base_url: str | None = None,
 ) -> str:
     settings = settings or Settings()
     active_client = claude
@@ -101,6 +174,23 @@ async def process_turn(
         else await db.get_current_week(interviewee_id, max_week)
     )
     session = await db.get_or_create_session(interviewee_id, week=week)
+
+    # === Progress (user-triggered) — now using real CoverageSnapshot
+    progress_keywords = ["進度", "目前進度", "訪談進度", "收集進度", "請問現在的訪談進度"]
+    if any(kw in incoming_message for kw in progress_keywords):
+        logger.info("[PROGRESS] User requested real progress: %s", interviewee_id)
+
+        # Build real state (this will compute the actual coverage_snapshot from DB)
+        turn_state = await build_turn_state(
+            interviewee_id=interviewee_id,
+            db=db,
+            selector=selector,
+            session=session,
+            adaptive=settings.adaptive_extraction,
+        )
+
+        return render_8x3_progress_card(turn_state.coverage_snapshot)
+
     command = pre_gate_command
     if is_session_closing(incoming_message):
         return await _close_session(
@@ -124,6 +214,7 @@ async def process_turn(
             db,
             selector,
             settings,
+            download_base_url,
         )
     turn_count = await db.count_turns(session.id)
     if _is_light_greeting(incoming_message):
@@ -135,6 +226,106 @@ async def process_turn(
             db,
             selector,
         )
+
+    # === L2 TurnReasoner (whitelist-only) ===
+    # Only designated test users go through the reasoning engine.
+    # The engine now actually respects next_move / next_question_id / echo (basic version).
+    if getattr(settings, "reasoning_turn_enabled", False):
+        test_ids_raw = getattr(settings, "reasoning_test_user_ids", "") or ""
+        allowed = {x.strip() for x in test_ids_raw.split(",") if x.strip()}
+        if interviewee_id in allowed:
+            # Record the user message first so TurnState has up-to-date history
+            scrub_result = scrub_pii(incoming_message)
+            if scrub_result.redactions:
+                logger.info(
+                    "PII redacted: %s items in turn from %s",
+                    len(scrub_result.redactions),
+                    interviewee_id,
+                )
+            user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
+            await db.save_redactions(user_turn.id, scrub_result.redactions)
+
+            turn_state = await build_turn_state(
+                interviewee_id=interviewee_id,
+                db=db,
+                selector=selector,
+                session=session,
+                adaptive=settings.adaptive_extraction,
+            )
+
+            reasoner_model = getattr(settings, "reasoner_model_name", None)
+            reasoner_prompt = load_system_prompt(getattr(settings, "reasoner_prompt_file", None))
+            reasoner = (
+                TurnReasoner(active_client, model=reasoner_model, system_prompt=reasoner_prompt)
+                if reasoner_model
+                else TurnReasoner(active_client, system_prompt=reasoner_prompt)
+            )
+            reasoner_output = await reasoner.run(turn_state)
+
+            # Rich decision log — this is what we will watch to debug ghost-wall
+            logger.info(
+                "[NEW REASONER] %s | move=%s boundary=%s eng=%s next_q=%s echo=%s has_reflection=%s",
+                interviewee_id,
+                reasoner_output.next_move,
+                reasoner_output.boundary_status,
+                reasoner_output.engagement_state,
+                reasoner_output.next_question_id,
+                reasoner_output.should_echo,
+                bool(reasoner_output.reflection_note),
+            )
+
+            reply_text = reasoner_output.reply
+            if reasoner_output.should_echo and reasoner_output.echo_content:
+                reply_text = f"{reasoner_output.echo_content}\n\n{reply_text}"
+
+            should_extract = _reasoner_output_should_extract(reasoner_output)
+            if should_extract:
+                extracted_anchors = await extract_anchors(
+                    user_turn, turn_state.current_question, active_client
+                )
+                deepest_layer = None
+                for anchor in extracted_anchors:
+                    deepest_layer = _deeper_layer(deepest_layer, anchor.layer)
+                    await db.save_anchor(
+                        interviewee_id,
+                        anchor.dimension,
+                        anchor.layer,
+                        anchor.content,
+                        anchor.source_turn_ids,
+                        anchor.source_question_ids,
+                        model=reasoner_model,
+                    )
+                if deepest_layer is not None:
+                    await db.record_question_answered(
+                        interviewee_id,
+                        turn_state.current_question.id,
+                        session.week,
+                        deepest_layer.value,
+                    )
+                logger.info(
+                    "[NEW REASONER] extracted %s anchors from %s",
+                    len(extracted_anchors),
+                    turn_state.current_question.id,
+                )
+
+            next_question_id = reasoner_output.next_question_id
+            if reasoner_output.next_move == NextMove.ADVANCE and not next_question_id:
+                next_question = _fallback_next_reasoner_question(turn_state)
+                next_question_id = next_question.id if next_question else None
+
+            # Act on the reasoner's decision.
+            if reasoner_output.next_move == NextMove.ADVANCE and next_question_id:
+                await db.set_current_question_id(session.id, next_question_id)
+                await db.record_question_asked(interviewee_id, next_question_id, session.week)
+                logger.info("[NEW REASONER] advanced to question %s", next_question_id)
+
+            if reasoner_output.next_move == NextMove.HONOR_SKIP or reasoner_output.boundary_status == BoundaryStatus.EXPLICIT_REFUSAL:
+                logger.info("[NEW REASONER] honored skip / explicit refusal")
+
+            await db.save_turn(session.id, "assistant", reply_text)
+
+            # Note: finalize / auto-export still skipped in this early path
+            return reply_text
 
     scrub_result = scrub_pii(incoming_message)
     if scrub_result.redactions:
@@ -199,6 +390,7 @@ async def process_turn(
     if assessment.kind == TurnKind.SUFFICIENT:
         extracted_anchors = await extract_anchors(user_turn, current_question, active_client)
         for anchor in extracted_anchors:
+            model_name = getattr(settings, "reasoner_model_name", None)
             await db.save_anchor(
                 interviewee_id,
                 anchor.dimension,
@@ -206,6 +398,7 @@ async def process_turn(
                 anchor.content,
                 anchor.source_turn_ids,
                 anchor.source_question_ids,
+                model=model_name,
             )
 
     probe_count = await db.get_probe_count(interviewee_id, current_question.id)
@@ -558,13 +751,14 @@ async def _handle_command(
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
+    download_base_url: str | None = None,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
     if isinstance(command, GenerateProfileRequest):
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
         await db.save_redactions(user_turn.id, scrub_result.redactions)
-        reply = await _handle_generate_profile(interviewee_id, db, settings)
+        reply = await _handle_generate_profile(interviewee_id, db, settings, download_base_url)
         await db.save_turn(session.id, "assistant", reply)
         return reply
 
@@ -611,54 +805,62 @@ async def _handle_generate_profile(
     interviewee_id: str,
     db: DB,
     settings: Settings,
+    download_base_url: str | None = None,
 ) -> str:
-    if not _line_snapshot_export_allowed(interviewee_id, settings):
+    if settings.byok_enabled and not byok.has_key(settings.byok_keys_dir, interviewee_id):
         return format_generate_profile_denied()
+
+    anchors = await db.load_anchors_summary(interviewee_id)
+    if not is_persona_sufficient(0, 1, anchors):
+        return format_generate_profile_denied()
+
+    snapshot = compute_coverage_snapshot(anchors)
     try:
-        paths = await export_snapshot(db, interviewee_id, Path(settings.snapshot_export_dir))
+        progress_card = render_8x3_progress_card(snapshot)
+        completion = calculate_weighted_completion(snapshot)
     except Exception as exc:
-        logger.exception("Snapshot export failed for %s: %s", interviewee_id, exc)
-        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
-    behavior_profile = next((path for path in paths if path.name == "behavior-profile.md"), None)
-    if behavior_profile is None:
-        logger.error("Snapshot export for %s did not include behavior-profile.md", interviewee_id)
-        return "行為模式檔草稿輸出失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
-    return _behavior_profile_for_line(behavior_profile.read_text(encoding="utf-8"))
+        logger.exception("Progress card rendering failed for %s: %s", interviewee_id, exc)
+        progress_card = ""
+        completion = 0
 
+    try:
+        package = await build_persona_export_package(
+            db,
+            interviewee_id,
+            settings.persona_export_dir,
+            snapshot,
+        )
+        raw_token = await create_download_token(
+            db,
+            interviewee_id,
+            package.zip_path,
+            expiry_minutes=settings.persona_download_expiry_minutes,
+        )
+    except Exception as exc:
+        logger.exception("Persona export zip failed for %s: %s", interviewee_id, exc)
+        return "人格檔 zip 產生失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
 
-def _behavior_profile_for_line(markdown: str) -> str:
-    lines = []
-    for line in markdown.splitlines():
-        heading_marks = len(line) - len(line.lstrip("#"))
-        if 1 <= heading_marks <= 6 and len(line) > heading_marks and line[heading_marks] == " ":
-            line = line[heading_marks + 1 :]
-        if line.startswith("> "):
-            line = line[2:]
-        elif line.startswith(">"):
-            line = line[1:]
-        if (
-            len(line) >= 2
-            and line.startswith("_")
-            and line.endswith("_")
-            and not line.startswith("__")
-            and not line.endswith("__")
-        ):
-            line = line[1:-1]
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def _line_snapshot_export_allowed(interviewee_id: str, settings: Settings) -> bool:
-    if not settings.line_snapshot_export_enabled:
-        return False
-    allowed = {
-        item.strip()
-        for item in settings.line_snapshot_export_user_ids.split(",")
-        if item.strip()
-    }
-    if settings.owner_line_user_id:
-        allowed.add(settings.owner_line_user_id)
-    return interviewee_id in allowed
+    base_url = download_base_url or settings.persona_download_base_url or ""
+    download_url = build_download_url(base_url, raw_token)
+    text = "\n\n".join(
+        part
+        for part in [
+            progress_card,
+            f"你目前訪談總完成度約 {completion}%。已為你產生目前版本的人格檔 zip。",
+            (
+                "下載連結有效 60 分鐘。若下載失敗或檔案損毀，請在有效期間內重新點擊連結。"  # noqa: RUF001
+                "若超過時間，請重新輸入「請匯出人格檔」取得新連結。\n"  # noqa: RUF001
+                f"{download_url}"
+            ),
+        ]
+        if part
+    )
+    return PersonaExportLineReply(
+        text,
+        zip_path=str(package.zip_path),
+        file_name=package.file_name,
+        caption=package.caption,
+    )
 
 
 def _handle_revoke_key(interviewee_id: str, settings: Settings) -> str:

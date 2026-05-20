@@ -11,6 +11,7 @@ from linebot.v3.messaging import (
     AsyncApiClient,
     AsyncMessagingApi,
     Configuration,
+    FlexMessage,
     PushMessageRequest,
     ReplyMessageRequest,
     TextMessage,
@@ -78,6 +79,10 @@ async def handle_line_webhook(
 
         event_id = _event_id(event)
         message_id = getattr(event.message, "id", None)
+        if event_id is None:
+            logger.error("LINE text event skipped because stable event id is missing")
+            skipped += 1
+            continue
         if not await db.claim_transport_event(
             event_id,
             "line",
@@ -99,6 +104,7 @@ async def handle_line_webhook(
                 db=db,
                 selector=selector,
                 settings=settings,
+                download_base_url=_download_base_url(settings, request),
             ),
             background_tasks,
         )
@@ -118,6 +124,7 @@ async def _process_text_event(
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
+    download_base_url: str | None = None,
 ) -> None:
     configuration = Configuration(access_token=access_token)
     async with AsyncApiClient(configuration) as api_client:
@@ -130,6 +137,7 @@ async def _process_text_event(
                 db=db,
                 selector=selector,
                 settings=settings,
+                download_base_url=download_base_url,
             )
         except Exception as exc:
             logger.error("process_turn failed for %s: %s", interviewee_id, exc)
@@ -144,24 +152,55 @@ async def _send_reply_or_push(
     line_bot_api: AsyncMessagingApi,
     reply_token: str,
     user_id: str,
-    reply: str,
+    reply: str | dict,
 ) -> bool:
     token_hint = reply_token[:8]
+    zip_path = getattr(reply, "zip_path", None)
+    zip_caption = getattr(reply, "caption", None)
+    if zip_path:
+        logger.warning(
+            "Persona zip artifact is ready for %s at %s, but LINE Messaging API "
+            "does not support arbitrary file/zip send messages; sending text reply only.",
+            user_id,
+            zip_path,
+        )
+
+    # Support Flex Message (progress card etc.)
+    if isinstance(reply, dict) and reply.get("type") == "flex":
+        try:
+            # More tolerant construction for different SDK versions
+            flex_message = FlexMessage(
+                alt_text=reply.get("altText", "訪談進度"),
+                contents=reply["contents"],   # pass the bubble dict directly
+            )
+            await line_bot_api.reply_message(
+                ReplyMessageRequest(reply_token=reply_token, messages=[flex_message])
+            )
+            logger.info("LINE Flex reply sent with token %s", token_hint)
+            return True
+        except Exception as flex_exc:
+            logger.error("LINE Flex reply failed for %s: %s", user_id, flex_exc)
+            # fallback to text
+            reply = "目前進度卡片暫時無法顯示, 已切換為文字模式。"
+
+    # Normal text path
     try:
         await line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=reply_token,
-                messages=[TextMessage(text=reply)],
+                messages=[TextMessage(text=str(reply))],
             )
         )
         logger.info("LINE reply sent with token %s", token_hint)
+        if zip_path and zip_caption:
+            logger.info("Persona zip caption for %s: %s", user_id, zip_caption)
         return True
     except Exception as reply_exc:
         logger.error("LINE reply failed for %s with token %s: %s", user_id, token_hint, reply_exc)
 
     try:
         await line_bot_api.push_message(
-            PushMessageRequest(to=user_id, messages=[TextMessage(text=reply)])
+            PushMessageRequest(to=user_id, messages=[TextMessage(text=str(reply))])
         )
         logger.info("LINE push fallback sent for %s after token %s failed", user_id, token_hint)
         return True
@@ -174,10 +213,18 @@ def _secret_value(secret) -> str | None:
     return secret.get_secret_value() if secret is not None else None
 
 
-def _event_id(event: MessageEvent) -> str:
+def _download_base_url(settings: Settings, request: Request) -> str | None:
+    if settings.persona_download_base_url:
+        return settings.persona_download_base_url
+    base_url = getattr(request, "base_url", None)
+    return str(base_url).rstrip("/") if base_url is not None else None
+
+
+def _event_id(event: MessageEvent) -> str | None:
     webhook_event_id = getattr(event, "webhook_event_id", None)
     message_id = getattr(event.message, "id", None)
-    return str(webhook_event_id or message_id or f"line:{id(event)}")
+    event_id = webhook_event_id or message_id
+    return str(event_id) if event_id else None
 
 
 def _enqueue(coro: Awaitable[None], background_tasks: BackgroundTasks | None) -> None:

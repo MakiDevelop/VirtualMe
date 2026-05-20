@@ -200,3 +200,17 @@ async def test_migration_adds_current_question_id_to_sessions(tmp_path):
         await conn.commit()
 
     assert await _column_exists(str(db), "sessions", "current_question_id")
+
+
+async def test_migration_creates_persona_download_tables(tmp_path):
+    db = tmp_path / "download-tables.db"
+    async with aiosqlite.connect(str(db)) as conn:
+        await _apply_schema_migrations(conn)
+        await conn.commit()
+        cursor = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
+            "('persona_download_tokens', 'persona_download_logs')"
+        )
+        tables = {row[0] for row in await cursor.fetchall()}
+
+    assert tables == {"persona_download_tokens", "persona_download_logs"}
