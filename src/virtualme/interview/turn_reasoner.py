@@ -38,6 +38,14 @@ class NextMove(StrEnum):
     SOFTEN = "soften"
 
 
+class SkipStopReason(StrEnum):
+    NONE = "none"
+    REFUSAL = "refusal"
+    RELUCTANCE = "reluctance"
+    FATIGUE = "fatigue"
+    PROBE_CAP_REACHED = "probe_cap_reached"
+
+
 @dataclass
 class TurnReasonerOutput:
     read: str
@@ -49,6 +57,7 @@ class TurnReasonerOutput:
     echo_content: str | None
     reflection_note: str | None
     reply: str
+    skip_stop_reason: str = "none"
 
 
 # Public baseline prompt. Production deployments may provide a private prompt file

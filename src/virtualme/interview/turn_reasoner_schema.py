@@ -23,6 +23,14 @@ class NextMove(StrEnum):
     SOFTEN = "soften"
 
 
+class SkipStopReason(StrEnum):
+    NONE = "none"
+    REFUSAL = "refusal"
+    RELUCTANCE = "reluctance"
+    FATIGUE = "fatigue"
+    PROBE_CAP_REACHED = "probe_cap_reached"
+
+
 class TurnReasonerOutput:
     """Simple container for reasoner output (no Pydantic to avoid extra_forbidden issues)"""
 
@@ -36,3 +44,4 @@ class TurnReasonerOutput:
         self.echo_content = kwargs.get("echo_content")
         self.reflection_note = kwargs.get("reflection_note")
         self.reply = kwargs.get("reply", "")
+        self.skip_stop_reason = kwargs.get("skip_stop_reason", "none")
