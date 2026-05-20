@@ -172,6 +172,7 @@ async def test_process_turn_generate_profile_exports_persona_zip_when_sufficient
     settings = Settings(
         anthropic_api_key=SecretStr("k"),
         persona_export_dir=str(tmp_path / "personas"),
+        persona_download_base_url="https://vm.example.com",
     )
     for index in range(3):
         await db.save_anchor("u1", Dimension.VOICE, Layer.FACT, f"voice {index}", [1], ["Q1"])
@@ -185,6 +186,8 @@ async def test_process_turn_generate_profile_exports_persona_zip_when_sufficient
     assert "你目前訪談總完成度約" in reply
     assert reply.file_name.startswith("VirtualMe_人格檔_")
     assert reply.caption == "你的人格檔 zip 已準備好"
+    assert "https://vm.example.com/download/persona/" in reply
+    assert "下載連結有效 60 分鐘" in reply
     assert (tmp_path / "personas" / "u1" / "本次匯出說明.txt").is_file()
     assert (tmp_path / "personas" / "u1" / "VOICE.md").is_file()
     assert (tmp_path / "personas" / "_packages" / "u1" / reply.file_name).is_file()

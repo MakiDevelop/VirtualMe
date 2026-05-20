@@ -3,9 +3,16 @@ from contextlib import asynccontextmanager
 
 from anthropic import AsyncAnthropic
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from virtualme import __version__
 from virtualme.config import Settings, sqlite_path
+from virtualme.export.download_tokens import (
+    DownloadFileUnavailable,
+    DownloadTokenExpired,
+    DownloadTokenNotFound,
+    resolve_download_token,
+)
 from virtualme.interview.question_selector import QuestionSelector, load_question_pool
 from virtualme.responder.persona import load_persona
 from virtualme.storage.db import DB
@@ -39,6 +46,35 @@ app = FastAPI(title="VirtualMe", version=__version__, lifespan=lifespan)
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"ok": "true", "version": __version__}
+
+
+@app.get("/download/persona/{token}")
+async def download_persona(token: str, request: Request):
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    try:
+        record = await resolve_download_token(
+            db,
+            token,
+            persona_export_dir=settings.persona_export_dir,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except DownloadTokenExpired:
+        return PlainTextResponse(
+            "下載連結已過期，請回到 LINE 重新輸入「請匯出人格檔」取得新連結。",  # noqa: RUF001
+            status_code=410,
+        )
+    except DownloadTokenNotFound as exc:
+        raise HTTPException(status_code=404, detail="download link not found") from exc
+    except DownloadFileUnavailable as exc:
+        raise HTTPException(status_code=404, detail="persona zip is unavailable") from exc
+
+    return FileResponse(
+        record.zip_path,
+        media_type="application/zip",
+        filename=record.zip_path.name,
+    )
 
 
 @app.post("/webhook/line")

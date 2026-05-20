@@ -5,6 +5,7 @@ from anthropic import AsyncAnthropic
 
 from virtualme.config import Settings
 from virtualme.export.auto import auto_export_persona
+from virtualme.export.download_tokens import build_download_url, create_download_token
 from virtualme.export.persona_package import build_persona_export_package
 from virtualme.interview import byok
 from virtualme.interview.anchor_extractor import extract_anchors
@@ -134,6 +135,7 @@ async def process_turn(
     selector: QuestionSelector,
     settings: Settings | None = None,
     override_week: int | None = None,
+    download_base_url: str | None = None,
 ) -> str:
     settings = settings or Settings()
     active_client = claude
@@ -212,6 +214,7 @@ async def process_turn(
             db,
             selector,
             settings,
+            download_base_url,
         )
     turn_count = await db.count_turns(session.id)
     if _is_light_greeting(incoming_message):
@@ -748,13 +751,14 @@ async def _handle_command(
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
+    download_base_url: str | None = None,
 ) -> str:
     """Reply to a meta-command. Saves the turn pair but runs no extraction."""
     if isinstance(command, GenerateProfileRequest):
         scrub_result = scrub_pii(incoming_message)
         user_turn = await db.save_turn(session.id, "user", scrub_result.scrubbed_text)
         await db.save_redactions(user_turn.id, scrub_result.redactions)
-        reply = await _handle_generate_profile(interviewee_id, db, settings)
+        reply = await _handle_generate_profile(interviewee_id, db, settings, download_base_url)
         await db.save_turn(session.id, "assistant", reply)
         return reply
 
@@ -801,6 +805,7 @@ async def _handle_generate_profile(
     interviewee_id: str,
     db: DB,
     settings: Settings,
+    download_base_url: str | None = None,
 ) -> str:
     if settings.byok_enabled and not byok.has_key(settings.byok_keys_dir, interviewee_id):
         return format_generate_profile_denied()
@@ -825,15 +830,28 @@ async def _handle_generate_profile(
             settings.persona_export_dir,
             snapshot,
         )
+        raw_token = await create_download_token(
+            db,
+            interviewee_id,
+            package.zip_path,
+            expiry_minutes=settings.persona_download_expiry_minutes,
+        )
     except Exception as exc:
         logger.exception("Persona export zip failed for %s: %s", interviewee_id, exc)
         return "人格檔 zip 產生失敗; 資料仍保留在訪談資料庫, 請稍後再試。"
 
+    base_url = download_base_url or settings.persona_download_base_url or ""
+    download_url = build_download_url(base_url, raw_token)
     text = "\n\n".join(
         part
         for part in [
             progress_card,
             f"你目前訪談總完成度約 {completion}%。已為你產生目前版本的人格檔 zip。",
+            (
+                "下載連結有效 60 分鐘。若下載失敗或檔案損毀，請在有效期間內重新點擊連結。"  # noqa: RUF001
+                "若超過時間，請重新輸入「請匯出人格檔」取得新連結。\n"  # noqa: RUF001
+                f"{download_url}"
+            ),
         ]
         if part
     )

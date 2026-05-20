@@ -103,6 +103,20 @@ class Settings(BaseSettings):
             "VIRTUALME_LINE_SNAPSHOT_EXPORT_USER_IDS",
         ),
     )
+    persona_download_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "persona_download_base_url",
+            "VIRTUALME_PERSONA_DOWNLOAD_BASE_URL",
+        ),
+    )
+    persona_download_expiry_minutes: int = Field(
+        60,
+        validation_alias=AliasChoices(
+            "persona_download_expiry_minutes",
+            "VIRTUALME_PERSONA_DOWNLOAD_EXPIRY_MINUTES",
+        ),
+    )
 
 
 def sqlite_path(database_url: str) -> str:

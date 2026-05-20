@@ -290,6 +290,47 @@ async def _apply_schema_migrations(conn: aiosqlite.Connection) -> None:
         )
         """
     )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS persona_download_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_hash TEXT NOT NULL UNIQUE,
+            interviewee_id TEXT NOT NULL,
+            zip_path TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            download_count INTEGER NOT NULL DEFAULT 0,
+            last_downloaded_at TEXT
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_persona_download_tokens_expires_at
+        ON persona_download_tokens(expires_at)
+        """
+    )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS persona_download_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            interviewee_id TEXT,
+            token_hash TEXT NOT NULL,
+            requested_at TEXT NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            success INTEGER NOT NULL,
+            failure_reason TEXT,
+            zip_path TEXT
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_persona_download_logs_token_hash
+        ON persona_download_logs(token_hash)
+        """
+    )
 
 
 async def init_db(path: str) -> None:

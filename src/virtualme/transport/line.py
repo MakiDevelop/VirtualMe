@@ -104,6 +104,7 @@ async def handle_line_webhook(
                 db=db,
                 selector=selector,
                 settings=settings,
+                download_base_url=_download_base_url(settings, request),
             ),
             background_tasks,
         )
@@ -123,6 +124,7 @@ async def _process_text_event(
     db: DB,
     selector: QuestionSelector,
     settings: Settings,
+    download_base_url: str | None = None,
 ) -> None:
     configuration = Configuration(access_token=access_token)
     async with AsyncApiClient(configuration) as api_client:
@@ -135,6 +137,7 @@ async def _process_text_event(
                 db=db,
                 selector=selector,
                 settings=settings,
+                download_base_url=download_base_url,
             )
         except Exception as exc:
             logger.error("process_turn failed for %s: %s", interviewee_id, exc)
@@ -208,6 +211,13 @@ async def _send_reply_or_push(
 
 def _secret_value(secret) -> str | None:
     return secret.get_secret_value() if secret is not None else None
+
+
+def _download_base_url(settings: Settings, request: Request) -> str | None:
+    if settings.persona_download_base_url:
+        return settings.persona_download_base_url
+    base_url = getattr(request, "base_url", None)
+    return str(base_url).rstrip("/") if base_url is not None else None
 
 
 def _event_id(event: MessageEvent) -> str | None:
