@@ -8,7 +8,7 @@ from virtualme.snapshot.stability_gate import (
     filter_core_truth_candidates,
     is_eligible_for_core_truths,
 )
-from virtualme.storage.db import Anchor, DB, Dimension, Layer
+from virtualme.storage.db import DB, Anchor, Dimension, Layer
 
 
 class TestStabilityGate:

@@ -8,7 +8,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 FORBIDDEN_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\b[Yy]ou are (an? )?[A-Za-z][A-Za-z -]+\b"),
     re.compile(r"\b[Yy]our true (self|nature) is\b"),

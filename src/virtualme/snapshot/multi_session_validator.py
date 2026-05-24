@@ -13,7 +13,7 @@ integration is deferred to M2.
 
 from __future__ import annotations
 
-from virtualme.storage.db import Anchor, DB
+from virtualme.storage.db import DB, Anchor
 
 
 async def unique_session_count(db: DB, turn_ids: list[int]) -> int:
@@ -57,6 +57,4 @@ async def can_be_validated(db: DB, anchor: Anchor) -> bool:
     (save_anchor / synthesis) is not yet wired to call this. M2 will add the
     integration.
     """
-    if await is_single_session(db, anchor):
-        return False
-    return True
+    return not await is_single_session(db, anchor)

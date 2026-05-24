@@ -9,6 +9,7 @@
 - **[Constitution v1.1](specs/11-constitution.md)** — 七位一體 council 2026-05-20 ratified；把先前散落於 `docs/TRUNK.md` / `specs/05` / milestone 的「謹慎、克制、有敬畏」立場 codify 為六條：P1 State-Trait Separation / P2 Contradiction Preservation / P3 Reflective Restraint / P4 Multi-Session Validation / P5 Self-Correction & Agency / P6 Provenance, Confidence & Temporal Decay
 - **訪談 reasoning engine 重構** — L0 transport idempotency fail-closed + L1 TurnState 只讀狀態物件 + L2 `turn_reasoner.decide_and_reply()` + Guardrail + feature flag (`reasoning_turn_enabled`) whitelist rollout
 - **使用者自助匯出人格檔 + 下載連結**
+- **Production demo map** — [`docs/architecture-demo-flow.md`](docs/architecture-demo-flow.md) documents the deployed LINE Bot / VPS architecture and a short demo script.
 - **M1 hard gate detectors（4 條）+ 115 contract tests**：
   - P3 — `SkipStopReason` enum + Guardrail metadata + reflection_note no-leak
   - P5 — `hedge_validator`（8 forbidden patterns / 12 hedge markers）+ unlike_me regression

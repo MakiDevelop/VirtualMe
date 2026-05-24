@@ -27,7 +27,7 @@ def _output(**overrides):
 
 
 def test_explicit_refusal_sets_skip_stop_reason():
-    """違規 -> reply 不能解讀；HONOR_SKIP + skip_stop_reason=refusal."""
+    """違規 -> reply 不能解讀; HONOR_SKIP + skip_stop_reason=refusal."""
     g = Guardrail()
     out = g.apply(
         _output(
@@ -94,7 +94,7 @@ def test_reflection_note_not_leaked_into_reply():
     g = Guardrail()
     out = g.apply(
         _output(
-            reflection_note="使用者顯示 X 心理 pattern（內部 audit only）",
+            reflection_note="使用者顯示 X 心理 pattern (內部 audit only)",
             reply="好的我們繼續下一題。",
         ),
         current_probe_count=0,

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from virtualme.storage.db import Anchor, Dimension
 
-
 # Dimensions that represent durable identity/trait surfaces.
 # STATE is current snapshot, not Core Truth.
 CORE_TRUTH_DIMENSIONS: frozenset[Dimension] = frozenset(
