@@ -212,7 +212,7 @@ python -m virtualme.blind_test \
   --results T1=1,T2=0,T3=1,T4=0,T5=1
 ```
 
-`blind_test.prepare` 只產生 `instructions.md`、`scorecard.md`、`persona-context.md`，不呼叫 LLM、不產生 scenario、不做 shuffle。
+`blind_test.prepare` 只產生 `instructions.md`、`scorecard.md`、`persona-context.md`，不呼叫 LLM、不產生 scenario、不做 shuffle。`persona-context.md` 使用 legacy recurring/unvalidated anchors 作為 operator context，不代表 validated traits。
 
 接 LINE / Telegram / 其他 messaging platform → 改 `src/virtualme/transport/`。
 

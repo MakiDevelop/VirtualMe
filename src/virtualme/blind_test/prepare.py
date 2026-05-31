@@ -100,17 +100,20 @@ def _render_persona_context(
     lines = [
         f"# Persona Context: {interviewee_id} Week {week}",
         "",
-        "Stopgap operator context from triangulated principles only. Do not show it to the",
-        "evaluator during scoring.",
+        "Stopgap operator context from legacy recurring principles only. These are not",
+        "validated traits. Do not show this context to the evaluator during scoring.",
         "",
         "## Counts by Dimension",
         "",
     ]
     for dimension in Dimension:
         items = anchors.get(dimension, [])
-        confirmed = sum(1 for anchor in items if anchor.triangulated)
-        lines.append(f"- {dimension.value}: {len(items)} anchors, {confirmed} triangulated")
-    lines.extend(["", "## Triangulated Principles", ""])
+        recurring = sum(1 for anchor in items if anchor.triangulated)
+        lines.append(
+            f"- {dimension.value}: {len(items)} anchors, "
+            f"{recurring} legacy recurring/unvalidated"
+        )
+    lines.extend(["", "## Legacy Recurring Principles", ""])
     for dimension in Dimension:
         lines.extend([f"## {dimension.value}", ""])
         items = [anchor for anchor in anchors.get(dimension, []) if anchor.triangulated]
@@ -124,7 +127,7 @@ def _render_persona_context(
 
 
 def _anchor_line(anchor: Anchor) -> str:
-    status = "triangulated" if anchor.triangulated else "emerging"
+    status = "legacy recurring/unvalidated" if anchor.triangulated else "emerging"
     content = scrub_pii(anchor.content).scrubbed_text
     return f"- [{anchor.layer.value}; {status}] {content}"
 

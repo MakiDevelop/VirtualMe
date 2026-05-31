@@ -76,7 +76,6 @@ Suggested M3 slices:
 
 ## Open Risks
 
-- `src/virtualme/blind_test/prepare.py` still uses legacy triangulated language for operator context. It is not part of the persona export/snapshot write path, but should be reviewed before treating blind-test artifacts as stable persona material.
 - `uv.lock` is currently untracked in the working tree and was not adopted by M2 changes.
 - The current hedge validator is intentionally conservative and pattern-based. It blocks clear generated assertions but is not a full semantic classifier.
 

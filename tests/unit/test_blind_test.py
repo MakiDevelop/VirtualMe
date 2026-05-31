@@ -157,7 +157,7 @@ async def test_blind_test_prepare_scorecard_has_week_eight_rows(tmp_path):
     assert "| T8 |" in text
 
 
-async def test_blind_test_prepare_persona_context_only_includes_triangulated(tmp_path):
+async def test_blind_test_prepare_persona_context_uses_recurring_unvalidated_language(tmp_path):
     db = DB(str(tmp_path / "virtualme.db"))
     await db.init()
     await db.save_anchor("local", Dimension.SOUL, Layer.PRINCIPLE, "draft value", [1], ["Q1"])
@@ -177,6 +177,10 @@ async def test_blind_test_prepare_persona_context_only_includes_triangulated(tmp
 
     assert "confirmed value" in text
     assert "draft value" not in text
+    assert "Legacy Recurring Principles" in text
+    assert "legacy recurring/unvalidated" in text
+    assert "validated traits" in text
+    assert "Triangulated Principles" not in text
 
 
 async def test_blind_test_prepare_rescrubs_pii_in_persona_context(tmp_path):
