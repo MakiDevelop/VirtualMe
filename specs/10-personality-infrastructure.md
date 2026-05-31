@@ -4,9 +4,9 @@
 > change the production interview runtime, and nothing in it authorizes work on
 > its own.
 >
-> Near-term priority and "what is on the trunk right now" are governed by
-> `docs/TRUNK.md`. Any "Future Module" below stays unbuilt until it passes the
-> Trunk Check in `docs/TRUNK.md` §5. On conflict, TRUNK.md wins.
+> Near-term priority and "what is on the trunk right now" are governed by the
+> project's internal roadmap. Any "Future Module" below stays unbuilt until it
+> passes the internal roadmap's trunk check. On conflict, the roadmap wins.
 
 ## Thesis
 
@@ -77,15 +77,15 @@ Recent dogfood produced some candidate raw material:
 Caveat: these are unverified candidates, not evidence the engine is working
 well. In the dogfood transcript several of them — especially the fatalistic
 framing — appeared *because the bot accepted a worldview platitude and stopped
-probing*, i.e. they sit at aphorism altitude, not incident altitude (see
-`09-interview-engine-v2.md` > Stop Condition: Altitude Criterion). Whether
+probing*, i.e. they sit at aphorism altitude, not incident altitude (an
+altitude criterion documented in internal methodology notes). Whether
 fatalism is a genuine trait of this interviewee or just a deflection cannot be
 decided from the current transcript. Each candidate must be re-drilled per
 STG-036 before it becomes persona material.
 
 [未定論] The general question — how to tell "deflection into philosophy" from
 "philosophy that is genuinely the person's trait" — is routed to Scout
-investigation; see `docs/TRUNK.md` §6.
+investigation (tracked in the internal roadmap).
 
 ## Main Product Risks
 
@@ -126,13 +126,13 @@ The same persona archive will behave differently across models:
 
 This is a real challenge, but it is NOT a near-term risk and NOT in scope for
 interview engine v2. It cannot be meaningfully addressed before single-model
-fidelity is proven (see Future Modules > Model Adapter Layer, and
-`docs/TRUNK.md` §4 trap #8).
+fidelity is proven (see Future Modules > Model Adapter Layer, and the
+internal roadmap's detour-trap list).
 
 [未定論] Whether cross-model portability should be designed in early or retro-
 fitted late is a genuine open sequencing question. The judgement that it is "a
 later problem" comes from a Claude-authored analysis and therefore carries some
-perspective bias. Routed to Scout investigation; see `docs/TRUNK.md` §6.
+perspective bias. Routed to Scout investigation (tracked in the internal roadmap).
 
 ## Future Modules
 
@@ -144,7 +144,7 @@ perspective bias. Routed to Scout investigation; see `docs/TRUNK.md` §6.
 >
 > The Model Adapter Layer and Fidelity Benchmark System are DEFERRED: they must
 > not be started until single-model persona fidelity has been demonstrated.
-> Starting them earlier is a detour — see `docs/TRUNK.md` §4 trap #8.
+> Starting them earlier is a detour (see the internal roadmap's detour-trap list).
 
 ### Decision Style Engine
 

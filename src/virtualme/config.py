@@ -69,6 +69,22 @@ class Settings(BaseSettings):
         "./data/personas",
         validation_alias=AliasChoices("persona_export_dir", "VIRTUALME_PERSONA_EXPORT_DIR"),
     )
+    reasoning_turn_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("reasoning_turn_enabled", "REASONING_TURN_ENABLED"),
+    )
+    reasoning_test_user_ids: str = Field(
+        default="",
+        validation_alias=AliasChoices("reasoning_test_user_ids", "REASONING_TEST_USER_IDS"),
+    )
+    reasoner_model_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("reasoner_model_name", "REASONER_MODEL_NAME"),
+    )
+    reasoner_prompt_file: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("reasoner_prompt_file", "REASONER_PROMPT_FILE"),
+    )
     snapshot_export_dir: str = Field(
         "./exports",
         validation_alias=AliasChoices("snapshot_export_dir", "VIRTUALME_SNAPSHOT_EXPORT_DIR"),
@@ -81,10 +97,24 @@ class Settings(BaseSettings):
         ),
     )
     line_snapshot_export_user_ids: str = Field(
-        "",
+        default="",
         validation_alias=AliasChoices(
             "line_snapshot_export_user_ids",
             "VIRTUALME_LINE_SNAPSHOT_EXPORT_USER_IDS",
+        ),
+    )
+    persona_download_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "persona_download_base_url",
+            "VIRTUALME_PERSONA_DOWNLOAD_BASE_URL",
+        ),
+    )
+    persona_download_expiry_minutes: int = Field(
+        60,
+        validation_alias=AliasChoices(
+            "persona_download_expiry_minutes",
+            "VIRTUALME_PERSONA_DOWNLOAD_EXPIRY_MINUTES",
         ),
     )
 

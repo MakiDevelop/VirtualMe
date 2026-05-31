@@ -123,9 +123,9 @@ async def test_process_turn_status_query_reports_completion_progress(tmp_path):
 
     reply = await process_turn("u1", "萃取進度", object(), db, selector, settings)
 
-    assert "語氣・表達: 33%" in reply
-    assert "界線・原則: 100%" in reply
-    assert "目前最缺" in reply
+    assert "目前訪談收集進度" in reply
+    assert "聲音/表達" in reply
+    assert "界線/責任     淺層:●●○" in reply
 
 
 async def test_process_turn_generate_profile_denied_by_default(tmp_path):
@@ -140,7 +140,7 @@ async def test_process_turn_generate_profile_denied_by_default(tmp_path):
 
     reply = await process_turn("u1", "產生人格檔", object(), db, selector, settings)
 
-    assert "沒有開放 LINE 直接產生行為模式檔" in reply
+    assert reply == "目前VM對你的認識還不夠，請多與VM再訪談一陣子喔"  # noqa: RUF001
     assert not (tmp_path / "snapshots").exists()
     turns = await db.load_session_turns(1)
     assert [turn.role for turn in turns] == ["user", "assistant"]
@@ -160,46 +160,44 @@ async def test_process_turn_generate_profile_denied_when_user_not_allowed(tmp_pa
 
     reply = await process_turn("friend1", "generate profile", object(), db, selector, settings)
 
-    assert "沒有開放 LINE 直接產生行為模式檔" in reply
+    assert reply == "目前VM對你的認識還不夠，請多與VM再訪談一陣子喔"  # noqa: RUF001
     assert not (tmp_path / "snapshots").exists()
 
 
-async def test_process_turn_generate_profile_exports_for_allowed_user_without_extraction(tmp_path):
+async def test_process_turn_generate_profile_exports_persona_zip_when_sufficient(tmp_path):
     db = await _new_db(tmp_path)
     selector = QuestionSelector(
         {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
     )
     settings = Settings(
         anthropic_api_key=SecretStr("k"),
-        line_snapshot_export_enabled=True,
-        line_snapshot_export_user_ids="u1",
-        snapshot_export_dir=str(tmp_path / "snapshots"),
+        persona_export_dir=str(tmp_path / "personas"),
+        persona_download_base_url="https://vm.example.com",
     )
-    await db.save_anchor(
-        "u1",
-        Dimension.SKILL,
-        Layer.PRINCIPLE,
-        "uses project triangle language around budget scope and schedule",
-        [1],
-        ["Q1"],
-    )
+    for index in range(3):
+        await db.save_anchor("u1", Dimension.VOICE, Layer.FACT, f"voice {index}", [1], ["Q1"])
+        await db.save_anchor(
+            "u1", Dimension.BOUNDARIES, Layer.PRINCIPLE, f"boundary {index}", [1], ["Q1"]
+        )
 
     reply = await process_turn("u1", "產生人格檔", object(), db, selector, settings)
 
-    snapshot_dir = tmp_path / "snapshots" / "u1" / "snapshot"
-    assert "行為模式檔 v0" in reply
-    assert "讀完之後" in reply
-    assert "construct-cards" not in reply
-    assert "###" not in reply
-    assert (snapshot_dir / "construct-cards.md").is_file()
-    assert (snapshot_dir / "SOUL-lite.md").is_file()
+    assert "VirtualMe 訪談機器人 【目前訪談收集進度（八維 × 三層）】" in reply  # noqa: RUF001
+    assert "你目前訪談總完成度約" in reply
+    assert reply.file_name.startswith("VirtualMe_人格檔_")
+    assert reply.caption == "你的人格檔 zip 已準備好"
+    assert "https://vm.example.com/download/persona/" in reply
+    assert "下載連結有效 60 分鐘" in reply
+    assert (tmp_path / "personas" / "u1" / "本次匯出說明.txt").is_file()
+    assert (tmp_path / "personas" / "u1" / "VOICE.md").is_file()
+    assert (tmp_path / "personas" / "_packages" / "u1" / reply.file_name).is_file()
     turns = await db.load_session_turns(1)
     assert [turn.role for turn in turns] == ["user", "assistant"]
     anchors = await db.load_anchors_summary("u1")
-    assert len(anchors[Dimension.SKILL]) == 1
+    assert len(anchors[Dimension.VOICE]) == 3
 
 
-async def test_process_turn_generate_profile_owner_is_allowed_when_flag_enabled(tmp_path):
+async def test_process_turn_generate_profile_ignores_legacy_whitelist_when_insufficient(tmp_path):
     db = await _new_db(tmp_path)
     selector = QuestionSelector(
         {1: [Question(id="Q1", week=1, dimension=Dimension.STATE, text="How has work been?")]}
@@ -213,11 +211,8 @@ async def test_process_turn_generate_profile_owner_is_allowed_when_flag_enabled(
 
     reply = await process_turn("owner-user", "export profile", object(), db, selector, settings)
 
-    assert "行為模式檔 v0" in reply
-    assert "讀完之後" in reply
-    assert "construct-cards" not in reply
-    assert "###" not in reply
-    assert (tmp_path / "snapshots" / "owner-user" / "snapshot" / "SOUL-lite.md").is_file()
+    assert reply == "目前VM對你的認識還不夠，請多與VM再訪談一陣子喔"  # noqa: RUF001
+    assert not (tmp_path / "snapshots").exists()
 
 
 def test_consent_accepted_reply_operator_mode_omits_api_key(tmp_path):
@@ -486,7 +481,7 @@ async def test_status_query_after_pause_does_not_advance_question(tmp_path):
 
     reply = await process_turn("u1", "目前訪談的進度如何?", _Claude(), db, selector, settings)
 
-    assert "總完成度" in reply
+    assert "目前訪談收集進度" in reply
     assert "People question" not in reply
     assert await db.get_current_question_id(session.id) == "Q1"
 

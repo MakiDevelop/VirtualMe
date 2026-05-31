@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 _GIT_AUTHOR = ["-c", "user.name=VirtualMe", "-c", "user.email=virtualme@localhost"]
 
 
-async def auto_export_persona(db: DB, interviewee_id: str, export_dir: str) -> list[Path]:
+async def auto_export_persona(
+    db: DB,
+    interviewee_id: str,
+    export_dir: str,
+    extra_files: dict[str, str] | None = None,
+) -> list[Path]:
     """Export the persona archive and commit it to a local-only git repo.
 
     The markdown export always runs. Git versioning is best-effort: a git
@@ -41,6 +46,14 @@ async def auto_export_persona(db: DB, interviewee_id: str, export_dir: str) -> l
     base = Path(export_dir)
     base.mkdir(parents=True, exist_ok=True)
     written = await export_markdown(db, interviewee_id, base)
+    if extra_files:
+        target = base / interviewee_id
+        for name, content in extra_files.items():
+            if "/" in name or "\\" in name or ".." in name:
+                raise ValueError("Invalid extra persona export filename")
+            path = target / name
+            path.write_text(content, encoding="utf-8")
+            written.append(path)
     await _commit_archive(base, interviewee_id)
     return written
 

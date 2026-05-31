@@ -16,9 +16,10 @@ build/
 
 # Environment
 .env
+.env*
+!.env.example
 .env.local
 .env.*.local
-!.env.example
 
 # SQLite databases (local data)
 *.db
@@ -47,6 +48,7 @@ Thumbs.db
 # Never commit actual interview transcripts or extracted SOUL/VOICE/SKILL files
 artifacts/
 transcripts/
+exports/
 *.transcript.md
 SOUL-*.md
 VOICE-*.md
@@ -67,6 +69,25 @@ STATE-*.md
 
 # Internal working dir (not for public)
 concept-for-chatgpt-diagram.md
+GEMINI.md
+docs/design/
+.private/
+private/
 
 # Claude Code local settings (operator-specific MCP refs, not for public)
 .claude/
+
+# === Moat protocol: v2 methodology + internal roadmap, withdrawn 2026-05-18 ===
+/src/virtualme/data/question-pool-v2.yaml
+/src/virtualme/data/domain-packs-v2.yaml
+/specs/09-interview-engine-v2.md
+/docs/research/virtualme-domain-pack-8-fields.md
+/src/virtualme/interview/v2_schema.py
+/src/virtualme/interview/v2_loader.py
+/tests/unit/test_interview_v2_loader.py
+/tests/unit/test_domain_packs_v2.py
+/docs/TRUNK.md
+
+# === Moat protocol: methodology implementations stay private（含 Version D 腳本 + 個人 PII）===
+/src/virtualme/interview/bait_reaction.py
+/tests/unit/test_bait_reaction.py
