@@ -77,6 +77,8 @@ VirtualMe 把這個發現延伸成可上線的 pipeline：
 
 ## 8 週後你會拿到什麼
 
+> 🔎 **先看成品**：[`examples/sample-maker/`](examples/sample-maker/) 是用真實 export pipeline 從合成資料產出的 demo persona archive（虛構人物、雙語）。不用跑 8 週就能看到輸出長怎樣，從 [`START_HERE.md`](examples/sample-maker/START_HERE.md) 開始。
+
 8 個 persona markdown 檔案（你的 archive；匯出時另含 `START_HERE.md`、`index.md`、`manifest.json` 作為入口、索引與機器可讀 metadata）：
 
 | 檔案 | 內容 |

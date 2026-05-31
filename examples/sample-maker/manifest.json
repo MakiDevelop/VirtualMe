@@ -1,0 +1,132 @@
+{
+  "schema_version": "0.5",
+  "export_id": "1d7957d9-e727-43bc-8838-d4f79cfac0b7",
+  "interviewee_id": "sample-maker",
+  "exported_at": "2026-05-31T06:28:05+00:00",
+  "persona_files": [
+    "SOUL.md",
+    "VOICE.md",
+    "SKILL.md",
+    "PEOPLE.md",
+    "HISTORY.md",
+    "JOURNAL.md",
+    "BOUNDARIES.md",
+    "STATE.md"
+  ],
+  "archive_files": [
+    "BOUNDARIES.md",
+    "HISTORY.md",
+    "JOURNAL.md",
+    "PEOPLE.md",
+    "SKILL.md",
+    "SOUL.md",
+    "START_HERE.md",
+    "STATE.md",
+    "VOICE.md",
+    "index.md",
+    "manifest.json"
+  ],
+  "human_entrypoint": "START_HERE.md",
+  "technical_index": "index.md",
+  "pii_scrub_scope": "anchor_content",
+  "dimensions": {
+    "SOUL": {
+      "file": "SOUL.md",
+      "description": "Identity, values, and durable red lines.",
+      "anchor_count": 4,
+      "triangulated_count": 3,
+      "emerging_count": 1
+    },
+    "VOICE": {
+      "file": "VOICE.md",
+      "description": "Voice patterns and reusable expression samples.",
+      "anchor_count": 3,
+      "triangulated_count": 0,
+      "emerging_count": 3
+    },
+    "SKILL": {
+      "file": "SKILL.md",
+      "description": "Domain know-how, practices, and task preferences.",
+      "anchor_count": 3,
+      "triangulated_count": 0,
+      "emerging_count": 3
+    },
+    "PEOPLE": {
+      "file": "PEOPLE.md",
+      "description": "Relationship context and recurring people schemas.",
+      "anchor_count": 2,
+      "triangulated_count": 0,
+      "emerging_count": 2
+    },
+    "HISTORY": {
+      "file": "HISTORY.md",
+      "description": "Life events and durable personal timeline context.",
+      "anchor_count": 2,
+      "triangulated_count": 0,
+      "emerging_count": 2
+    },
+    "JOURNAL": {
+      "file": "JOURNAL.md",
+      "description": "Reflections, interpretations, and periodic event notes.",
+      "anchor_count": 0,
+      "triangulated_count": 0,
+      "emerging_count": 0
+    },
+    "BOUNDARIES": {
+      "file": "BOUNDARIES.md",
+      "description": "Refusals, privacy rules, and persona update protocol.",
+      "anchor_count": 3,
+      "triangulated_count": 2,
+      "emerging_count": 1
+    },
+    "STATE": {
+      "file": "STATE.md",
+      "description": "Current-state snapshot that may become stale over time.",
+      "anchor_count": 1,
+      "triangulated_count": 0,
+      "emerging_count": 1
+    }
+  },
+  "payload_files": {
+    "BOUNDARIES.md": {
+      "sha256": "sha256:6197ecb310e6b29120a27ccaba7bd90b9494150f162809d9999f3d06765de5ad",
+      "bytes": 1033
+    },
+    "HISTORY.md": {
+      "sha256": "sha256:7758a0bfcb71240ad766555095335c33bb49e315a1f2acbe9a6c08bf692971b7",
+      "bytes": 777
+    },
+    "JOURNAL.md": {
+      "sha256": "sha256:9a243eb9bbeeca72230fa077993db8d013abae7fce87b43e95c41f65ebf9940b",
+      "bytes": 338
+    },
+    "PEOPLE.md": {
+      "sha256": "sha256:8f7e1e1400655cd7033a9114f14570382084cdb6104e45d1367d1e18d7d4ed46",
+      "bytes": 771
+    },
+    "SKILL.md": {
+      "sha256": "sha256:f8e4b16c6a305ca19e41b39e2e5e32906ad34f66598819391400411f99244f03",
+      "bytes": 1032
+    },
+    "SOUL.md": {
+      "sha256": "sha256:72c746dae91197e02c17d23e7f66e89c690bb8cd9cacdfa983eddf8e5306c076",
+      "bytes": 1374
+    },
+    "START_HERE.md": {
+      "sha256": "sha256:899d80b3a119d902795a57ee81cf909716c0075e8c36e8d5b8d5b35d28063aa8",
+      "bytes": 1541
+    },
+    "STATE.md": {
+      "sha256": "sha256:b15f4dbc1160880b867dba5b8fcd8701f8f08dca20a0959cde609b3234489819",
+      "bytes": 544
+    },
+    "VOICE.md": {
+      "sha256": "sha256:781d9c1255e226675b9a578770d30d1e63f7eedaaae7e80061e945f689b83ff2",
+      "bytes": 1044
+    },
+    "index.md": {
+      "sha256": "sha256:dc522cb4105b46945ecf91d21c0a0f3b8913a316a8fe8bbc48f085bb52c5a811",
+      "bytes": 584
+    }
+  }
+}
