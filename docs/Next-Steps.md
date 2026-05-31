@@ -1,95 +1,84 @@
 # VirtualMe Next Steps
 
-Updated: 2026-05-14
+Updated: 2026-05-31
 
-This note captures the next pragmatic additions after the v0.5 stabilization pass. Keep each item as a small, independently testable slice.
+This note tracks the next pragmatic slices after Constitution v1.1 M1 and M2 runtime enforcement. Keep each item small, testable, and demo-safe.
 
 ## Current State
 
-VirtualMe now has the minimum loop needed for local PoC validation:
+VirtualMe now has:
 
-- Packaged question pool loading.
-- Anchor triangulation write-back.
-- Advisory week progression.
-- Session current-question tracking.
-- Minimal markdown export.
-- Minimal blind-test result recorder.
-- Minimal blind-test preparation export.
+- Local-first interview storage and question progress tracking.
+- Persona markdown export with PII re-scrubbing.
+- Snapshot / construct-card review draft generation.
+- Blind-test preparation artifacts.
+- Constitution v1.1 M1 contract tests.
+- M2 runtime promotion gate for export/snapshot surfaces.
 
 Validation baseline:
 
-- `.venv/bin/python -m pytest -q` -> 91 passed
-- `.venv/bin/ruff check src tests` -> passed
+- `uv run pytest -q` -> 333 passed
+- `uv run ruff check src tests` -> passed
 
 ## Recently Completed
 
-### 1. Tiny blind-test preparation export
+### M2a. Runtime promotion gate
 
-Build on the existing markdown exporter and blind-test recorder, but do not generate scenarios yet.
+Implemented:
 
-Target command:
+- `src/virtualme/snapshot/promotion_gate.py`
+- Runtime tiers: `observed`, `recurring`, `cross_session`, `validated`
+- DB helper to compute anchor source session counts from `source_turn_ids`
+- Markdown export sections:
+  - `Validated Patterns`
+  - `Recurring but Unvalidated Patterns`
+  - `Emerging Patterns`
+- Snapshot confidence cap for same-session recurring anchors
 
-```bash
-python -m virtualme.blind_test.prepare \
-  --db sqlite:///./data/virtualme.db \
-  --interviewee local \
-  --week 5 \
-  --out ./exports/blind-test
-```
+Important semantic decision:
 
-Expected output:
+- `triangulated=True` remains a legacy recurring-evidence signal.
+- `triangulated=True` does not mean validated.
+- Same-session 3-question anchors must show missing `cross_session_evidence`.
 
-- `instructions.md` with operator steps.
-- `scorecard.md` with empty `T1..T5` rows for manual scoring.
-- `persona-context.md` with the existing `principles.md` / anchor summary copied or referenced.
+### M2b. Hedge output gate
 
-Why this is next:
+Implemented:
 
-- It helps another person run the current manual protocol without changing DB schema.
-- It stays LLM-free.
-- It does not require scenario generation, shuffle storage, or UI.
+- Persona export write path calls `assert_no_unhedged_assertions()`.
+- Snapshot export write path calls `assert_no_unhedged_assertions()`.
+- Generated unhedged stable-trait assertions such as `You are ...` fail before file write.
+- Markdown blockquotes are ignored by the gate so raw source evidence can still be exported with provenance.
 
-Acceptance criteria:
+## Next: M3 Validation Lifecycle
 
-- Does not require `ANTHROPIC_API_KEY` when `--db` is provided. Done.
-- Produces deterministic markdown files. Done.
-- Has focused tests for generated file names and scorecard rows. Done.
+Do not start with a broad migration until Maki confirms policy wording and compatibility needs.
 
-This is implemented in `src/virtualme/blind_test/prepare.py`.
+Suggested M3 slices:
 
-## Useful But Not Urgent
+1. Add explicit persisted validation fields:
+   - `promotion_tier`
+   - `validated_at`
+   - `validated_by`
+   - `validation_source`
+2. Add human review promotion policy:
+   - cross-session evidence + review can become `validated`
+   - `unlike_me` remains a hard veto
+3. Add manifest maturity metadata:
+   - per dimension tier counts
+   - export-level maturity summary
+4. Decide compatibility policy:
+   - whether to keep an alias for old `## Core Truths`
+   - whether downstream consumers must migrate to `## Validated Patterns`
+5. Consider P6 temporal decay:
+   - stale state downgrade
+   - review prompts for old claims
 
-### 2. Store blind-test audit payload later
+## Open Risks
 
-Only add this when manual testing shows the current `correctness_per_item` field is insufficient.
-
-Likely future fields:
-
-- scenario text
-- human response hash
-- agent response hash
-- shuffled order
-- evaluator id for Gate 2
-
-Do this as a documented migration, not as a speculative schema change.
-
-### 3. Persona summarizer
-
-Needed before agent-generated blind-test responses become meaningful.
-
-Minimum shape:
-
-- Reads triangulated principles and selected voice anchors.
-- Produces compact `SOUL`, `VOICE`, `SKILL`, `PEOPLE`, `BOUNDARIES` sections.
-- Exports markdown first; avoid prompt/runtime integration until output quality is inspected.
-
-### 4. CLI ergonomics
-
-After one or two real blind-test runs, consider:
-
-- `--results-file` only if copy-paste becomes annoying.
-- clearer error examples for bad `Tn=0|1` input.
-- README snippet for the current blind-test workflow.
+- `src/virtualme/blind_test/prepare.py` still uses legacy triangulated language for operator context. It is not part of the persona export/snapshot write path, but should be reviewed before treating blind-test artifacts as stable persona material.
+- `uv.lock` is currently untracked in the working tree and was not adopted by M2 changes.
+- The current hedge validator is intentionally conservative and pattern-based. It blocks clear generated assertions but is not a full semantic classifier.
 
 ## Defer
 
@@ -99,5 +88,3 @@ After one or two real blind-test runs, consider:
 - Gate 2 multi-evaluator workflow.
 - Web UI.
 - Configurable verdict thresholds.
-
-These are not blockers for the next demo.

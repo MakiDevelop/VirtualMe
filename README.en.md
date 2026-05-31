@@ -2,20 +2,22 @@
 
 > Extract a person into an AI agent — through an 8-week interview, not a form.
 
-**Current release: v1.1.0** — baseline interview + coverage tracking + persona markdown export, plus Constitution v1.1 (six Stability & Restraint Principles) and matching M1 hard gates.
+**Current release: v1.1.1** — Constitution v1.1 plus M2 runtime enforcement: export / snapshot no longer treat legacy `triangulated=True` as a validated trait, and generated unhedged stable-trait assertions are blocked before files are written.
 
-### v1.1.0 Highlights
+### v1.1.1 Highlights
 
 - **[Constitution v1.1](specs/11-constitution.md)** — ratified by seven-agent council on 2026-05-20. Codifies the project's "caution, restraint, reverence" stance previously scattered across `docs/TRUNK.md` / `specs/05` / milestones into six principles: P1 State-Trait Separation / P2 Contradiction Preservation / P3 Reflective Restraint / P4 Multi-Session Validation / P5 Self-Correction & Agency / P6 Provenance, Confidence & Temporal Decay.
 - **Interview reasoning engine refactor** — L0 transport idempotency fail-closed + L1 read-only TurnState + L2 `turn_reasoner.decide_and_reply()` + Guardrail + feature flag (`reasoning_turn_enabled`) whitelist rollout.
 - **User-initiated persona archive export + download link**
+- **M2 runtime gate** — same-session 3-question anchors are recurring but unvalidated; only cross-session evidence can enter `Validated Patterns`.
+- **P5 hedge output gate** — generated export/snapshot markdown fails before write if it contains unhedged stable-trait assertions such as `You are ...`.
 - **M1 hard gate detectors (4 principles) + 115 contract tests**:
   - P3 — `SkipStopReason` enum + Guardrail metadata + `reflection_note` no-leak
   - P5 — `hedge_validator` (8 forbidden patterns / 12 hedge markers) + `unlike_me` regression
   - P1 — `stability_gate.is_eligible_for_core_truths()` (STATE never enters Core Truths)
   - P4 — `multi_session_validator.can_be_validated()` (single-session can never be validated)
 
-> M2 will wire detectors into `build_snapshot_bundle` / export pipeline. This release ships detectors + contract tests that lock the invariants. See `specs/11-constitution.md` §M2/M3.
+> `triangulated` remains a legacy recurring-evidence signal, not a validation certificate. See `specs/11-constitution.md` §M2/M3.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
@@ -75,7 +77,7 @@ VirtualMe replaces the form with a **therapist-style depth interview**:
 
 - One question at a time, then **probe the rationale**
 - Five-rule decision tree (R1–R5): fact → pattern → principle → counter-example → triangulation
-- Only **triangulated principles** (surfaced in ≥3 different questions) become SOUL anchors
+- **Triangulation** (surfaced in ≥3 different questions) means recurring evidence; validated/stable surfaces require cross-session evidence
 - Behavioral samples and failure cases weighted higher than abstract self-description
 
 ## Academic grounding

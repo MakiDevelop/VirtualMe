@@ -2,6 +2,23 @@
 
 All notable changes to VirtualMe are documented here.
 
+## v1.1.1
+
+M2 runtime enforcement for Constitution v1.1 export/snapshot surfaces.
+
+### Highlights
+
+- Added `snapshot.promotion_gate` runtime classifier with `observed` / `recurring` / `cross_session` / `validated` tiers.
+- Markdown export no longer treats legacy `triangulated=True` as a validated Core Truth. Same-session 3-question anchors render under `Recurring but Unvalidated Patterns` with missing `cross_session_evidence`.
+- Snapshot synthesis now computes anchor source session counts from source turns and caps same-session recurring evidence below stable/high confidence.
+- Wired P5 hedge validation into persona export and snapshot export write paths. Generated unhedged stable assertions such as `You are ...` now fail before files are written, while source blockquotes remain exportable as evidence.
+- Updated regression coverage for P1/P4/P5 runtime behavior.
+
+### Compatibility notes
+
+- Dimension markdown headings changed from `## Core Truths` to `## Validated Patterns` plus `## Recurring but Unvalidated Patterns`. Downstream parsers that depended on the old heading should update before consuming v1.1.1 exports.
+- `triangulated` remains in the DB as a legacy recurring-evidence signal; it is not a validation certificate.
+
 ## v1.1.0
 
 在 baseline interview + coverage tracking + persona markdown export 之上，補上 Constitution v1.1（六條 Stability & Restraint Principles）與對應的 M1 hard gates。

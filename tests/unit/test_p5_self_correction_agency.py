@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import get_args
 
+import pytest
+
+from virtualme.export import markdown as export_markdown_module
+from virtualme.export.markdown import export_markdown
 from virtualme.snapshot.core import (
     ConstructCard,
     ConstructCardReview,
@@ -11,12 +15,15 @@ from virtualme.snapshot.core import (
     ReviewVerdict,
     SnapshotBundle,
     apply_construct_card_reviews,
+    export_snapshot_bundle,
 )
 from virtualme.snapshot.hedge_validator import (
+    HedgeValidationError,
+    assert_no_unhedged_assertions,
     find_unhedged_assertions,
     has_hedge_marker,
 )
-from virtualme.storage.db import Dimension, Layer
+from virtualme.storage.db import DB, Dimension, Layer
 
 
 class TestHedgeValidator:
@@ -53,6 +60,46 @@ class TestHedgeValidator:
         violations = find_unhedged_assertions(text)
         assert len(violations) == 1
         assert violations[0].line_number == 2
+
+    def test_export_gate_ignores_source_blockquotes(self):
+        text = "## Evidence\n\n  > You are bold.\n"
+        assert_no_unhedged_assertions(text, surface="test")
+
+    def test_export_gate_rejects_generated_unhedged_assertion(self):
+        with pytest.raises(HedgeValidationError):
+            assert_no_unhedged_assertions("Summary: You are bold.", surface="test")
+
+
+async def test_markdown_export_blocks_generated_unhedged_assertions(tmp_path, monkeypatch):
+    db = DB(str(tmp_path / "virtualme.db"))
+    await db.init()
+    await db.save_anchor("u1", Dimension.SOUL, Layer.PRINCIPLE, "values care", [1], ["Q1"])
+    monkeypatch.setattr(
+        export_markdown_module,
+        "_render_start_here",
+        lambda *_args: "# Start\n\nYou are bold.\n",
+    )
+
+    with pytest.raises(HedgeValidationError):
+        await export_markdown(db, "u1", tmp_path / "exports")
+
+
+def test_snapshot_export_blocks_generated_unhedged_assertions(tmp_path, monkeypatch):
+    bundle = SnapshotBundle(
+        interviewee_id="u1",
+        generated_at="2026-05-31T00:00:00+00:00",
+        construct_cards=[],
+        hypotheses=[],
+        mini_blind_test=[],
+        feedback_routes=[],
+    )
+    monkeypatch.setattr(
+        "virtualme.snapshot.core.render_construct_cards",
+        lambda *_args: "# Cards\n\nYou are bold.\n",
+    )
+
+    with pytest.raises(HedgeValidationError):
+        export_snapshot_bundle(bundle, tmp_path / "exports")
 
 
 def _reviewed_card(verdict: str) -> ConstructCard:

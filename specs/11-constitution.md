@@ -5,6 +5,8 @@
 > **Supersedes**: 散落於 `docs/TRUNK.md` / `specs/05-boundaries-and-pii.md` / milestone notes 的隱性 stance（無 v1.0 單一文件）
 > **Council inputs**: Seven-agent council 2026-05-20（synthesis at `~/Documents/agent-council/virtualme/SYNTHESIS.md`）
 
+> **Implementation note 2026-05-31**: M2 runtime enforcement is now wired for persona export and snapshot export. `triangulated=True` is treated as legacy recurring evidence, not validation; same-session recurring anchors are blocked from validated/stable surfaces, and generated unhedged stable-trait assertions fail before export files are written.
+
 ---
 
 ## 0. Preamble — 為什麼有這份文件

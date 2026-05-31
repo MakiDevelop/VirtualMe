@@ -42,10 +42,27 @@ class HedgeViolation:
     pattern_id: int
 
 
-def find_unhedged_assertions(text: str) -> list[HedgeViolation]:
+class HedgeValidationError(ValueError):
+    def __init__(self, surface: str, violations: list[HedgeViolation]) -> None:
+        self.surface = surface
+        self.violations = violations
+        details = ", ".join(
+            f"line {violation.line_number}: {violation.matched_text}"
+            for violation in violations[:3]
+        )
+        super().__init__(f"{surface} contains unhedged stable assertions: {details}")
+
+
+def find_unhedged_assertions(
+    text: str,
+    *,
+    ignore_markdown_blockquotes: bool = False,
+) -> list[HedgeViolation]:
     """Return forbidden stable-trait assertions found in text."""
     violations: list[HedgeViolation] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
+        if ignore_markdown_blockquotes and line.lstrip().startswith(">"):
+            continue
         for pattern_id, pattern in enumerate(FORBIDDEN_PATTERNS):
             match = pattern.search(line)
             if match:
@@ -63,3 +80,18 @@ def has_hedge_marker(text: str) -> bool:
     """Return True when text includes at least one known hedge marker."""
     lowered = text.lower()
     return any(marker.lower() in lowered for marker in HEDGE_MARKERS)
+
+
+def assert_no_unhedged_assertions(
+    text: str,
+    *,
+    surface: str,
+    ignore_markdown_blockquotes: bool = True,
+) -> None:
+    """Fail before writing generated surfaces with unhedged stable assertions."""
+    violations = find_unhedged_assertions(
+        text,
+        ignore_markdown_blockquotes=ignore_markdown_blockquotes,
+    )
+    if violations:
+        raise HedgeValidationError(surface, violations)

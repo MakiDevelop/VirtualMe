@@ -8,6 +8,7 @@ from typing import Literal
 
 from virtualme.interview.pii import scrub_pii
 from virtualme.interview.triples import PersonaTriple
+from virtualme.snapshot.hedge_validator import assert_no_unhedged_assertions
 from virtualme.snapshot.models import (
     ConstructCard,
     ConstructCardReview,
@@ -164,6 +165,7 @@ def export_snapshot_bundle(
         )
     written: list[Path] = []
     for name, content in files.items():
+        assert_no_unhedged_assertions(content, surface=f"snapshot export {name}")
         path = target / name
         path.write_text(content, encoding="utf-8")
         written.append(path)

@@ -7,7 +7,7 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![English](https://img.shields.io/badge/Lang-English-red.svg)](README.en.md)
 
-> **最新版本 v1.1.0** — Constitution v1.1（六條 Stability & Restraint Principles）+ M1 hard gates + 115 contract tests。完整變更見 [CHANGELOG](CHANGELOG.md)。
+> **最新版本 v1.1.1** — Constitution v1.1 + M2 runtime enforcement：export / snapshot 不再把 legacy `triangulated=True` 當 validated trait，並在寫檔前阻擋 unhedged stable-trait assertion。完整變更見 [CHANGELOG](CHANGELOG.md)。
 
 ---
 
@@ -63,7 +63,7 @@ VirtualMe 用 **therapist-style 深度訪談**取代問卷：
 
 - Bot 每次問一題，等你完整回答，**追問 rationale**
 - 五條 R1–R5 追問規則：事實 → 模式 → 原則 → 反例 → 三角校驗
-- 只有**三角校驗過的原則**（在 ≥3 個不同問題出現過）才寫進 SOUL 錨點
+- **三角校驗**（在 ≥3 個不同問題出現過）只代表 recurring evidence；要進入 validated/stable surface 還需要跨 session evidence
 - 行為樣本 / 失敗案例權重高於抽象自陳
 
 ## 學術依據
@@ -98,6 +98,14 @@ v1.0.0 的輸出包含兩種層級：
 
 - **Raw archive**：`python -m virtualme.export` 產生 8 個 dimension markdown、入口檔與 manifest。
 - **Review draft**：可依 anchors 人工整理成 `SOUL.md` / `VOICE.md` / `SKILL.md` / `PEOPLE.md` / `HISTORY.md` / `JOURNAL.md` / `BOUNDARIES.md` / `STATE.md` 八份可讀人格檔，用於「像 / 不像 / 缺例子」review。
+
+v1.1.1 起，dimension markdown 會把 anchors 分成：
+
+- `Validated Patterns`：跨 session evidence 才可進入。
+- `Recurring but Unvalidated Patterns`：例如同一 session 中 3 個 question id 的 recurring signal。
+- `Emerging Patterns`：單次或弱 evidence。
+
+輸出階段會阻擋生成器自己的 unhedged stable-trait assertion；原始訪談證據仍以 blockquote 保留 provenance。
 
 加上一個可用的 agent endpoint，可以：
 - 起草給客戶 / 候選人 / 同事的訊息

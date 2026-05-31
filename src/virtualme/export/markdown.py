@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from virtualme.interview.pii import scrub_pii
+from virtualme.snapshot.hedge_validator import assert_no_unhedged_assertions
 from virtualme.snapshot.promotion_gate import PromotionDecision, PromotionTier, classify_anchor
 from virtualme.storage.db import DB, Anchor, Dimension
 
@@ -65,6 +66,7 @@ async def export_markdown(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
 
     written: list[Path] = []
     for name, content in files.items():
+        assert_no_unhedged_assertions(content, surface=f"persona export {name}")
         path = target / name
         path.write_text(content, encoding="utf-8")
         written.append(path)
