@@ -2,6 +2,7 @@
 
 > 把一個人**萃取**成 AI 代理人——用 8 週訪談，不用填表。
 
+[![CI](https://github.com/MakiDevelop/VirtualMe/actions/workflows/ci.yml/badge.svg)](https://github.com/MakiDevelop/VirtualMe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![English](https://img.shields.io/badge/Lang-English-red.svg)](README.en.md)
