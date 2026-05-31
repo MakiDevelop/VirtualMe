@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -26,6 +26,7 @@ class EvidenceItem(BaseModel):
     source_anchor_ids: list[int] = Field(default_factory=list)
     source_turn_ids: list[int] = Field(default_factory=list)
     source_question_ids: list[str] = Field(default_factory=list)
+    source_session_count: int | None = None
     confidence: float | None = None
 
 
@@ -117,3 +118,4 @@ class _Candidate:
     content: str
     evidence: EvidenceItem
     weight: int
+    missing_evidence: list[str] = field(default_factory=list)

@@ -38,8 +38,12 @@ class TestStabilityGate:
 
 
 async def test_state_anchor_not_in_soul_md_core_truths(tmp_path):
-    """STATE source anchors must not render as SOUL.md Core Truths."""
+    """STATE source anchors must not render as SOUL.md stable patterns."""
     db = await _new_db(tmp_path)
+    week_1 = await db.get_or_create_session("u1", week=1)
+    week_2 = await db.get_or_create_session("u1", week=2)
+    soul_turn_1 = await db.save_turn(week_1.id, "user", "truth matters")
+    soul_turn_2 = await db.save_turn(week_2.id, "user", "truth still matters")
     await db.save_anchor(
         "u1",
         Dimension.STATE,
@@ -53,16 +57,20 @@ async def test_state_anchor_not_in_soul_md_core_truths(tmp_path):
         Dimension.SOUL,
         Layer.PRINCIPLE,
         "values direct truth under delivery pressure",
-        [4, 5, 6],
+        [soul_turn_1.id, soul_turn_2.id],
         ["Q4", "Q5", "Q6"],
     )
 
     await export_markdown(db, "u1", tmp_path / "exports")
     soul_text = (tmp_path / "exports" / "u1" / "SOUL.md").read_text(encoding="utf-8")
-    core_truths = _section(soul_text, "## Core Truths", "## Emerging Patterns")
+    stable_patterns = _section(
+        soul_text,
+        "## Validated Patterns",
+        "## Recurring but Unvalidated Patterns",
+    )
 
-    assert "values direct truth under delivery pressure" in core_truths
-    assert "最近很累" not in core_truths
+    assert "values direct truth under delivery pressure" in stable_patterns
+    assert "最近很累" not in stable_patterns
 
 
 async def test_state_dimension_still_exported(tmp_path):

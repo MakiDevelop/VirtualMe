@@ -19,6 +19,7 @@ from virtualme.snapshot.models import (
     SoulLiteHypothesis,
     _Candidate,
 )
+from virtualme.snapshot.promotion_gate import classify_anchor
 from virtualme.storage.db import DB, Anchor, Dimension, Layer
 
 SNAPSHOT_SCHEMA_VERSION = "0.1"
@@ -93,11 +94,13 @@ _STOP_WORDS = {
 
 async def build_snapshot_bundle(db: DB, interviewee_id: str) -> SnapshotBundle:
     anchors = await db.load_anchors_summary(interviewee_id)
+    source_session_counts = await db.load_anchor_source_session_counts(interviewee_id)
     triples = await db.load_triples(interviewee_id)
     return build_snapshot_bundle_from_data(
         interviewee_id=interviewee_id,
         anchors=anchors,
         triples=triples,
+        source_session_counts=source_session_counts,
     )
 
 
@@ -106,9 +109,10 @@ def build_snapshot_bundle_from_data(
     interviewee_id: str,
     anchors: dict[Dimension, list[Anchor]],
     triples: list[PersonaTriple],
+    source_session_counts: dict[int, int] | None = None,
 ) -> SnapshotBundle:
     generated_at = datetime.now(UTC).isoformat(timespec="seconds")
-    hypotheses = _build_hypotheses(anchors, triples)
+    hypotheses = _build_hypotheses(anchors, triples, source_session_counts or {})
     construct_cards = _build_construct_cards(hypotheses)
     return SnapshotBundle(
         interviewee_id=interviewee_id,
@@ -763,8 +767,9 @@ def _first_review_target(bundle: SnapshotBundle) -> str:
 def _build_hypotheses(
     anchors: dict[Dimension, list[Anchor]],
     triples: list[PersonaTriple],
+    source_session_counts: dict[int, int],
 ) -> list[SoulLiteHypothesis]:
-    candidates = _anchor_candidates(anchors) + _triple_candidates(triples)
+    candidates = _anchor_candidates(anchors, source_session_counts) + _triple_candidates(triples)
     ordered = sorted(candidates, key=lambda item: item.weight, reverse=True)
     selected: list[_Candidate] = []
     seen: set[tuple[Dimension, str]] = set()
@@ -780,14 +785,19 @@ def _build_hypotheses(
     return [_candidate_to_hypothesis(index, candidate) for index, candidate in enumerate(selected, 1)]
 
 
-def _anchor_candidates(anchors: dict[Dimension, list[Anchor]]) -> list[_Candidate]:
+def _anchor_candidates(
+    anchors: dict[Dimension, list[Anchor]],
+    source_session_counts: dict[int, int],
+) -> list[_Candidate]:
     candidates: list[_Candidate] = []
     for dimension in CORE_DIMENSIONS:
         for anchor in anchors.get(dimension, []):
             content = _clean(anchor.content)
             if not content:
                 continue
-            weight = _anchor_weight(anchor)
+            session_count = source_session_counts.get(anchor.id or -1, 0)
+            promotion = classify_anchor(anchor, source_session_count=session_count)
+            weight = _anchor_weight(anchor, source_session_count=session_count)
             candidates.append(
                 _Candidate(
                     dimension=dimension,
@@ -800,8 +810,10 @@ def _anchor_candidates(anchors: dict[Dimension, list[Anchor]]) -> list[_Candidat
                         source_anchor_ids=[anchor.id] if anchor.id is not None else [],
                         source_turn_ids=anchor.source_turn_ids,
                         source_question_ids=anchor.source_question_ids,
+                        source_session_count=session_count,
                     ),
                     weight=weight,
+                    missing_evidence=promotion.missing_evidence,
                 )
             )
     return candidates
@@ -1087,10 +1099,19 @@ def _finalize_construct_card(card: ConstructCard) -> ConstructCard:
     has_falsifier = bool(card.falsifier.strip())
     has_exception_audit = card.exception_rule is not None or "exception" not in card.missing_evidence
     raw_wrapper_risk = _max_raw_wrapper_overlap(card) > 0.45
+    has_cross_session_support = any(
+        (evidence.source_session_count or 0) >= 2 for evidence in card.supporting_evidence
+    )
     confidence_level: Literal["insufficient", "draft", "plausible", "validated"] = "draft"
     reasons = ["rule-based v0.1 synthesis"]
     if support_count <= 1:
         reasons.append("single-anchor support caps confidence at draft")
+    if not has_cross_session_support:
+        reasons.append("missing cross-session validation")
+        if "cross_session_evidence" not in card.missing_evidence:
+            card = card.model_copy(
+                update={"missing_evidence": [*card.missing_evidence, "cross_session_evidence"]}
+            )
     if not has_falsifier:
         confidence_level = "insufficient"
         reasons.append("missing falsifier")
@@ -1108,6 +1129,7 @@ def _finalize_construct_card(card: ConstructCard) -> ConstructCard:
                 "multi_anchor_support": support_count > 1,
                 "has_falsifier": has_falsifier,
                 "has_exception_or_counterexample_audit": has_exception_audit,
+                "has_cross_session_support": has_cross_session_support,
                 "raw_wrapper_safe": not raw_wrapper_risk,
                 "human_reviewed": False,
             },
@@ -1164,10 +1186,12 @@ def _build_feedback_routes(
     return routes
 
 
-def _anchor_weight(anchor: Anchor) -> int:
+def _anchor_weight(anchor: Anchor, *, source_session_count: int = 0) -> int:
     weight = 0
-    if anchor.triangulated:
+    if source_session_count >= 2:
         weight += 10
+    elif anchor.triangulated:
+        weight += 4
     weight += {Layer.PRINCIPLE: 6, Layer.PATTERN: 4, Layer.FACT: 2}[anchor.layer]
     weight += min(len(set(anchor.source_question_ids)), 3)
     if _has_decision_signal(anchor.content):
@@ -1176,6 +1200,10 @@ def _anchor_weight(anchor: Anchor) -> int:
 
 
 def _confidence(candidate: _Candidate) -> str:
+    if "cross_session_evidence" in candidate.missing_evidence:
+        if candidate.weight >= 10:
+            return "medium"
+        return "low"
     if candidate.weight >= 16:
         return "high"
     if candidate.weight >= 10:
@@ -1198,6 +1226,8 @@ def _hypothesis_text(candidate: _Candidate) -> str:
 
 
 def _missing_evidence(candidate: _Candidate, confidence: str) -> str:
+    if candidate.missing_evidence:
+        return "Missing evidence: " + ", ".join(candidate.missing_evidence)
     if confidence == "high":
         return "Needs user review, but already has stronger provenance than a single statement."
     if _has_decision_signal(candidate.content):

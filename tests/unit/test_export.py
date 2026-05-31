@@ -71,10 +71,40 @@ async def test_dimension_files_separate_core_truths_and_emerging_patterns(tmp_pa
     await export_markdown(db, "u1", tmp_path / "exports")
     text = (tmp_path / "exports" / "u1" / "SOUL.md").read_text(encoding="utf-8")
 
-    assert "## Core Truths" in text
+    assert "## Validated Patterns" in text
+    assert "## Recurring but Unvalidated Patterns" in text
     assert "## Emerging Patterns" in text
     assert "confirmed value" in text
     assert "draft value" in text
+
+
+async def test_same_session_three_question_anchor_is_not_validated_pattern(tmp_path):
+    db = DB(str(tmp_path / "virtualme.db"))
+    await db.init()
+    session = await db.get_or_create_session("u1", week=1)
+    turns = [
+        await db.save_turn(session.id, "user", "answer one"),
+        await db.save_turn(session.id, "user", "answer two"),
+        await db.save_turn(session.id, "user", "answer three"),
+    ]
+    await db.save_anchor(
+        "u1",
+        Dimension.SOUL,
+        Layer.PRINCIPLE,
+        "chooses direct truth when project risk is high",
+        [turn.id for turn in turns],
+        ["Q1", "Q2", "Q3"],
+    )
+
+    await export_markdown(db, "u1", tmp_path / "exports")
+    text = (tmp_path / "exports" / "u1" / "SOUL.md").read_text(encoding="utf-8")
+    validated_section = text.split("## Recurring but Unvalidated Patterns", 1)[0]
+
+    assert "## Validated Patterns" in text
+    assert "chooses direct truth" not in validated_section
+    assert "chooses direct truth" in text.split("## Recurring but Unvalidated Patterns", 1)[1]
+    assert "Promotion tier: recurring" in text
+    assert "cross_session_evidence" in text
 
 
 async def test_provenance_is_collapsed_under_anchor_items(tmp_path):

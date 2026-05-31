@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from virtualme.interview.pii import scrub_pii
+from virtualme.snapshot.promotion_gate import PromotionDecision, PromotionTier, classify_anchor
 from virtualme.storage.db import DB, Anchor, Dimension
 
 SCHEMA_VERSION = "0.5"
@@ -27,6 +28,15 @@ DIMENSION_DESCRIPTIONS = {
 async def export_markdown(db: DB, interviewee_id: str, out_dir: Path) -> list[Path]:
     """Export current local anchors into the persona markdown archive."""
     anchors = await db.load_anchors_summary(interviewee_id)
+    source_session_counts = await db.load_anchor_source_session_counts(interviewee_id)
+    promotion_decisions = {
+        _anchor_key(anchor): classify_anchor(
+            anchor,
+            source_session_count=source_session_counts.get(anchor.id or -1, 0),
+        )
+        for items in anchors.values()
+        for anchor in items
+    }
     target = out_dir / interviewee_id
     target.mkdir(parents=True, exist_ok=True)
     exported_at = datetime.now(UTC).isoformat(timespec="seconds")
@@ -40,6 +50,7 @@ async def export_markdown(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
                 dimension,
                 anchors.get(dimension, []),
                 exported_at,
+                promotion_decisions,
             )
             for dimension in Dimension
         },
@@ -76,7 +87,7 @@ def _render_start_here(
         f"- Exported at: {exported_at}",
         f"- Persona files: {len(Dimension)}",
         f"- Total anchors: {total}",
-        f"- Core truths: {triangulated}",
+        f"- Legacy triangulated anchors: {triangulated}",
         "",
         "## Recommended Reading Order",
         "",
@@ -116,7 +127,7 @@ def _render_index(
         "",
         f"- Generated at: {exported_at}",
         f"- Total anchors: {total}",
-        f"- Triangulated principles: {triangulated}",
+        f"- Legacy triangulated principles: {triangulated}",
         f"- Schema version: {SCHEMA_VERSION}",
         "",
         "## Persona Files",
@@ -132,16 +143,39 @@ def _render_index(
     return "\n".join(lines) + "\n"
 
 
-def _render_dimension_file(dimension: Dimension, anchors: list[Anchor], exported_at: str) -> str:
-    triangulated = [anchor for anchor in anchors if anchor.triangulated]
-    emerging = [anchor for anchor in anchors if not anchor.triangulated]
+def _render_dimension_file(
+    dimension: Dimension,
+    anchors: list[Anchor],
+    exported_at: str,
+    promotion_decisions: dict[int, PromotionDecision] | None = None,
+) -> str:
+    decisions = promotion_decisions or {
+        _anchor_key(anchor): classify_anchor(anchor) for anchor in anchors
+    }
+    stable = [
+        anchor
+        for anchor in anchors
+        if decisions[_anchor_key(anchor)].tier
+        in {PromotionTier.CROSS_SESSION, PromotionTier.VALIDATED}
+    ]
+    recurring = [
+        anchor
+        for anchor in anchors
+        if decisions[_anchor_key(anchor)].tier == PromotionTier.RECURRING
+    ]
+    emerging = [
+        anchor
+        for anchor in anchors
+        if decisions[_anchor_key(anchor)].tier == PromotionTier.OBSERVED
+    ]
     lines = [
         "---",
         f'schema_version: "{SCHEMA_VERSION}"',
         f"dimension: {dimension.value}",
         f"exported_at: {exported_at}",
         f"anchor_count: {len(anchors)}",
-        f"triangulated_count: {len(triangulated)}",
+        f"validated_or_cross_session_count: {len(stable)}",
+        f"recurring_unvalidated_count: {len(recurring)}",
         f"emerging_count: {len(emerging)}",
         "anchor_content_pii_scrubbed: true",
         "---",
@@ -152,12 +186,29 @@ def _render_dimension_file(dimension: Dimension, anchors: list[Anchor], exported
         "",
     ]
 
-    lines.extend(["## Core Truths", ""])
-    if not triangulated:
-        lines.extend(["_(no core truths yet)_", ""])
+    lines.extend(
+        [
+            "## Validated Patterns",
+            "",
+            "_Only cross-session validated patterns appear here._",
+            "",
+        ]
+    )
+    if not stable:
+        lines.extend(["_(no validated patterns yet)_", ""])
     else:
-        for anchor in triangulated:
-            lines.extend(_anchor_block(anchor))
+        for anchor in stable:
+            lines.extend(_anchor_block(anchor, decisions[_anchor_key(anchor)]))
+        lines.append("")
+
+    lines.extend(["## Recurring but Unvalidated Patterns", ""])
+    if not recurring:
+        lines.extend(["_(no recurring unvalidated patterns yet)_", ""])
+    else:
+        lines.append("_These need cross-session validation before they can be treated as stable._")
+        lines.append("")
+        for anchor in recurring:
+            lines.extend(_anchor_block(anchor, decisions[_anchor_key(anchor)]))
         lines.append("")
 
     lines.extend(["## Emerging Patterns", ""])
@@ -165,17 +216,17 @@ def _render_dimension_file(dimension: Dimension, anchors: list[Anchor], exported
         lines.extend(["_(no emerging patterns yet)_", ""])
     else:
         for anchor in emerging:
-            lines.extend(_anchor_block(anchor))
+            lines.extend(_anchor_block(anchor, decisions[_anchor_key(anchor)]))
         lines.append("")
 
     return "\n".join(lines)
 
 
-def _anchor_block(anchor: Anchor) -> list[str]:
+def _anchor_block(anchor: Anchor, decision: PromotionDecision | None = None) -> list[str]:
     content = scrub_pii(anchor.content).scrubbed_text
     question_ids = ", ".join(anchor.source_question_ids) or "unknown"
     turn_ids = ", ".join(str(turn_id) for turn_id in anchor.source_turn_ids) or "unknown"
-    status = "triangulated" if anchor.triangulated else "emerging"
+    decision = decision or classify_anchor(anchor)
     return [
         "-",
         "",
@@ -185,13 +236,20 @@ def _anchor_block(anchor: Anchor) -> list[str]:
         "  <summary>Provenance</summary>",
         "",
         f"  - Layer: {anchor.layer.value}",
-        f"  - Status: {status}",
+        f"  - Legacy triangulated: {'yes' if anchor.triangulated else 'no'}",
+        f"  - Promotion tier: {decision.tier.value}",
+        f"  - Promotion reason: {decision.reason}",
+        f"  - Missing evidence: {', '.join(decision.missing_evidence) or 'none'}",
         f"  - Questions: {question_ids}",
         f"  - Turns: {turn_ids}",
         "",
         "  </details>",
         "",
     ]
+
+
+def _anchor_key(anchor: Anchor) -> int:
+    return anchor.id if anchor.id is not None else id(anchor)
 
 
 def _blockquote_lines(content: str) -> list[str]:

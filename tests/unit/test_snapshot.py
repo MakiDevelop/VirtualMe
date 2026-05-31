@@ -41,10 +41,37 @@ async def test_build_snapshot_prefers_triangulated_decision_anchors(tmp_path):
     assert bundle.hypotheses
     first = bundle.hypotheses[0]
     assert first.dimension == Dimension.SOUL
-    assert first.confidence == "high"
-    assert first.needs_verification is False
+    assert first.confidence == "medium"
+    assert first.needs_verification is True
     assert "direct truth" in first.hypothesis
     assert first.evidence[0].source_question_ids == ["Q1", "Q2", "Q3"]
+    assert "cross_session_evidence" in first.missing_evidence
+
+
+async def test_same_session_triangulated_anchor_cannot_be_validated_snapshot_signal(tmp_path):
+    db = await _new_db(tmp_path)
+    session = await db.get_or_create_session("u1", week=1)
+    turns = [
+        await db.save_turn(session.id, "user", "answer one"),
+        await db.save_turn(session.id, "user", "answer two"),
+        await db.save_turn(session.id, "user", "answer three"),
+    ]
+    await db.save_anchor(
+        "u1",
+        Dimension.SOUL,
+        Layer.PRINCIPLE,
+        "I choose direct truth over keeping peace when project risk is high",
+        [turn.id for turn in turns],
+        ["Q1", "Q2", "Q3"],
+    )
+
+    bundle = await build_snapshot_bundle(db, "u1")
+    first = bundle.hypotheses[0]
+
+    assert first.confidence != "high"
+    assert first.needs_verification is True
+    assert first.evidence[0].source_session_count == 1
+    assert "cross_session_evidence" in first.missing_evidence
 
 
 async def test_snapshot_uses_triples_when_anchors_are_sparse(tmp_path):

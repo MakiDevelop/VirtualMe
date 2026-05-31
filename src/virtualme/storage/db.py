@@ -1151,6 +1151,38 @@ class DB:
             summary[anchor.dimension].append(anchor)
         return summary
 
+    async def load_anchor_source_session_counts(self, interviewee_id: str) -> dict[int, int]:
+        rows = await self._fetch_anchors(interviewee_id)
+        turn_ids_by_anchor: dict[int, list[int]] = {}
+        all_turn_ids: set[int] = set()
+        for row in rows:
+            anchor_id = int(row["id"])
+            turn_ids = json.loads(row["source_turn_ids"])
+            turn_ids_by_anchor[anchor_id] = turn_ids
+            all_turn_ids.update(turn_ids)
+        if not all_turn_ids:
+            return {anchor_id: 0 for anchor_id in turn_ids_by_anchor}
+
+        placeholders = ", ".join("?" for _ in all_turn_ids)
+        async with self._connect() as conn:
+            cur = await conn.execute(
+                f"""
+                SELECT turns.id AS turn_id, turns.session_id AS session_id
+                FROM turns
+                WHERE turns.id IN ({placeholders})
+                """,
+                tuple(sorted(all_turn_ids)),
+            )
+            turn_session_rows = await cur.fetchall()
+
+        session_by_turn = {int(row[0]): int(row[1]) for row in turn_session_rows}
+        return {
+            anchor_id: len(
+                {session_by_turn[turn_id] for turn_id in turn_ids if turn_id in session_by_turn}
+            )
+            for anchor_id, turn_ids in turn_ids_by_anchor.items()
+        }
+
     async def load_triangulated(self, interviewee_id: str) -> list[Principle]:
         rows = await self._fetch_anchors(interviewee_id, triangulated=True)
         return [
