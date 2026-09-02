@@ -3,10 +3,12 @@
 This folder is your VirtualMe persona archive: human-editable Markdown files
 extracted from the interview process, with a machine-readable manifest beside them.
 
-- Exported at: 2026-05-31T06:28:05+00:00
+- Exported at: 2026-09-02T02:48:52+00:00
 - Persona files: 8
-- Total anchors: 18
-- Core truths: 5
+- Total anchors: 19
+- Validated-section patterns: 5
+- Recurring but unvalidated patterns: 4
+- Emerging patterns: 10
 
 ## Recommended Reading Order
 
