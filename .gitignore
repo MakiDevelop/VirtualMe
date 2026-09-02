@@ -73,6 +73,7 @@ GEMINI.md
 docs/design/
 .private/
 private/
+.amh/
 
 # Claude Code local settings (operator-specific MCP refs, not for public)
 .claude/
