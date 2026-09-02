@@ -44,8 +44,18 @@ async def export_markdown(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
     export_id = str(uuid4())
 
     files: dict[str, str] = {
-        "START_HERE.md": _render_start_here(interviewee_id, anchors, exported_at),
-        "index.md": _render_index(interviewee_id, anchors, exported_at),
+        "START_HERE.md": _render_start_here(
+            interviewee_id,
+            anchors,
+            exported_at,
+            promotion_decisions,
+        ),
+        "index.md": _render_index(
+            interviewee_id,
+            anchors,
+            exported_at,
+            promotion_decisions,
+        ),
         **{
             f"{dimension.value}.md": _render_dimension_file(
                 dimension,
@@ -62,6 +72,7 @@ async def export_markdown(db: DB, interviewee_id: str, out_dir: Path) -> list[Pa
         export_id=export_id,
         anchors=anchors,
         files=files,
+        promotion_decisions=promotion_decisions,
     )
 
     written: list[Path] = []
@@ -77,9 +88,10 @@ def _render_start_here(
     interviewee_id: str,
     anchors: dict[Dimension, list[Anchor]],
     exported_at: str,
+    promotion_decisions: dict[int, PromotionDecision],
 ) -> str:
     total = sum(len(items) for items in anchors.values())
-    triangulated = sum(1 for items in anchors.values() for anchor in items if anchor.triangulated)
+    maturity = _maturity_counts(anchors, promotion_decisions)
     lines = [
         f"# Start Here: {interviewee_id}",
         "",
@@ -89,7 +101,9 @@ def _render_start_here(
         f"- Exported at: {exported_at}",
         f"- Persona files: {len(Dimension)}",
         f"- Total anchors: {total}",
-        f"- Legacy triangulated anchors: {triangulated}",
+        f"- Validated-section patterns: {maturity['validated_or_cross_session']}",
+        f"- Recurring but unvalidated patterns: {maturity['recurring_unvalidated']}",
+        f"- Emerging patterns: {maturity['emerging']}",
         "",
         "## Recommended Reading Order",
         "",
@@ -121,15 +135,18 @@ def _render_index(
     interviewee_id: str,
     anchors: dict[Dimension, list[Anchor]],
     exported_at: str,
+    promotion_decisions: dict[int, PromotionDecision],
 ) -> str:
     total = sum(len(items) for items in anchors.values())
-    triangulated = sum(1 for items in anchors.values() for anchor in items if anchor.triangulated)
+    maturity = _maturity_counts(anchors, promotion_decisions)
     lines = [
         f"# VirtualMe Export: {interviewee_id}",
         "",
         f"- Generated at: {exported_at}",
         f"- Total anchors: {total}",
-        f"- Legacy triangulated principles: {triangulated}",
+        f"- Validated-section patterns: {maturity['validated_or_cross_session']}",
+        f"- Recurring but unvalidated patterns: {maturity['recurring_unvalidated']}",
+        f"- Emerging patterns: {maturity['emerging']}",
         f"- Schema version: {SCHEMA_VERSION}",
         "",
         "## Persona Files",
@@ -137,10 +154,16 @@ def _render_index(
     ]
     for dimension in Dimension:
         items = anchors.get(dimension, [])
-        confirmed = sum(1 for anchor in items if anchor.triangulated)
+        dimension_maturity = _maturity_counts(
+            {dimension: items},
+            promotion_decisions,
+        )
         lines.append(
             f"- [{dimension.value}.md]({dimension.value}.md): "
-            f"{len(items)} anchors, {confirmed} triangulated"
+            f"{len(items)} anchors; "
+            f"{dimension_maturity['validated_or_cross_session']} validated-section, "
+            f"{dimension_maturity['recurring_unvalidated']} recurring unvalidated, "
+            f"{dimension_maturity['emerging']} emerging"
         )
     return "\n".join(lines) + "\n"
 
@@ -192,7 +215,8 @@ def _render_dimension_file(
         [
             "## Validated Patterns",
             "",
-            "_Only cross-session validated patterns appear here._",
+            "_Only patterns with cross-session evidence appear here; provenance "
+            "shows whether human validation is still missing._",
             "",
         ]
     )
@@ -265,18 +289,23 @@ def _render_manifest(
     export_id: str,
     anchors: dict[Dimension, list[Anchor]],
     files: dict[str, str],
+    promotion_decisions: dict[int, PromotionDecision],
 ) -> str:
     dimensions = {}
     for dimension in Dimension:
         items = anchors.get(dimension, [])
+        maturity = _maturity_counts({dimension: items}, promotion_decisions)
         dimensions[dimension.value] = {
             "file": f"{dimension.value}.md",
             "description": DIMENSION_DESCRIPTIONS[dimension],
             "anchor_count": len(items),
             "triangulated_count": sum(1 for anchor in items if anchor.triangulated),
-            "emerging_count": sum(1 for anchor in items if not anchor.triangulated),
+            "validated_or_cross_session_count": maturity["validated_or_cross_session"],
+            "recurring_unvalidated_count": maturity["recurring_unvalidated"],
+            "emerging_count": maturity["emerging"],
         }
 
+    maturity = _maturity_counts(anchors, promotion_decisions)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "export_id": export_id,
@@ -287,6 +316,7 @@ def _render_manifest(
         "human_entrypoint": "START_HERE.md",
         "technical_index": "index.md",
         "pii_scrub_scope": "anchor_content",
+        "maturity_counts": maturity,
         "dimensions": dimensions,
         "payload_files": {
             name: {
@@ -297,6 +327,29 @@ def _render_manifest(
         },
     }
     return json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+
+
+def _maturity_counts(
+    anchors: dict[Dimension, list[Anchor]],
+    promotion_decisions: dict[int, PromotionDecision],
+) -> dict[str, int]:
+    decisions = [
+        promotion_decisions[_anchor_key(anchor)]
+        for items in anchors.values()
+        for anchor in items
+    ]
+    return {
+        "validated_or_cross_session": sum(
+            decision.tier in {PromotionTier.CROSS_SESSION, PromotionTier.VALIDATED}
+            for decision in decisions
+        ),
+        "recurring_unvalidated": sum(
+            decision.tier == PromotionTier.RECURRING for decision in decisions
+        ),
+        "emerging": sum(
+            decision.tier == PromotionTier.OBSERVED for decision in decisions
+        ),
+    }
 
 
 def _sha256(content: str) -> str:

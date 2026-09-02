@@ -4,6 +4,7 @@ All notable changes to VirtualMe are documented here.
 
 ## Unreleased
 
+- Regenerated the synthetic `sample-maker` archive with three maturity layers and added an archive-driven depth comparison.
 - Split the production question pool into an external `QUESTION_POOL_FILE` policy pack with a packaged toy fallback and fail-loud loading.
 - Added a transcript-safe operator CLI, pause gate, local smoke test, and self-hosting runbook.
 - Added provable single-command identity deletion with pre/post scanning and PII-free receipts.
