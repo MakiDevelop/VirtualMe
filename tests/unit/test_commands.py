@@ -219,10 +219,12 @@ def test_consent_accepted_reply_operator_mode_omits_api_key(tmp_path):
     byok_keys_dir = tmp_path / "byok-keys"
     operator_keys_dir = tmp_path / "operator-keys"
 
-    byok_reply = byok.run_consent_gate("byok-user", "同意", str(byok_keys_dir), byok_enabled=True)
+    byok_reply = byok.run_consent_gate(
+        "byok-user", byok.CONSENT_TEXT, str(byok_keys_dir), byok_enabled=True
+    )
     operator_reply = byok.run_consent_gate(
         "operator-user",
-        "同意",
+        byok.CONSENT_TEXT,
         str(operator_keys_dir),
         byok_enabled=False,
     )

@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001
 """BYOK (Bring Your Own Key) gate for the interview path — BW5.
 
 Each interviewee must provide their own Claude API key before extraction
@@ -16,9 +17,13 @@ Key storage (BW5 D2, Chair ratified):
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
+import re
+import unicodedata
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from anthropic import (
@@ -29,42 +34,46 @@ from anthropic import (
     UnprocessableEntityError,
 )
 
+from virtualme.interview.crisis import CRISIS_HELPLINE_EXAMPLES_ZH
 from virtualme.interview.models import MODEL_FAST, create_message
 
 logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "sk-ant-"
-CONSENT_TEXT = "同意"
+CONSENT_TEXT = "我已滿18歲，同意開始"
+CONSENT_VERSION = "2026-09-01"
+_CONSENT_ACCEPTANCE_PATTERN = re.compile(
+    r"^我(?:已滿|年滿)\s*18\s*[歲岁]\s*[,，]?\s*同意開始\s*[。.!！?？]*$"
+)
 
 # Canned gate replies. These are static strings: returning one costs zero LLM
 # calls and writes zero turns, which the gate flow depends on.
 ONBOARDING_REPLY = (
-    "我是 VirtualMe 人格萃取機器人。開始之前，"  # noqa: RUF001
-    "請先提供您的 Claude API Key（sk-ant- 開頭）。"  # noqa: RUF001
+    "我是 VirtualMe 人格萃取機器人。開始之前，"
+    "請先提供您的 Claude API Key（sk-ant- 開頭）。"
 )
-CONSENT_REPLY = (
-    "我是 VirtualMe —— 我會用對話, 一次一題, 慢慢認識你。"
-    "整個過程你隨時可以說「今天先到這」暫停。\n\n"
-    "開始前請先確認並回覆「同意」。\n\n"
-    "1. 訪談資料會儲存在 Maki 的 VPS 上。\n"
-    "2. Maki 不會主動讀取您的訪談內容或行為模式檔; "
-    "除非您要求 Maki 介入判斷或協助 review。\n"
-    "3. 請自行移除不想留下的個人資料或第三人個資; "
-    "系統不會替您改寫或置換人名。\n"
-    "4. 若要刪除資料, 請明確指定範圍: 訪談問答 / 行為模式檔 / Claude API Key。"
-    "我不會主動亂刪。\n"
-    "5. 產出的檔案稱為「行為模式檔」, 不是診斷、不是定論, "
-    "只是從訪談中萃取出的特質與行為模式草稿。\n\n"
-    "若接受以上說明, 請回覆「同意」。"
-)
+CONSENT_REPLY = f"""\
+正式開始前，請先閱讀並確認以下訪談界線：
+
+1. 我的方法是「therapist-style 深度訪談」：我會追問「為什麼」，直到你的判斷標準浮現。但我是 AI，不是心理師；這不是心理治療，也不是心理諮商。
+2. 過程可能浮現你未曾注意的童年、創傷或未解決的決定。若你不舒服，隨時可以 skip、換題、說「累了」或說「這段不要存」。
+3. 我會保密：只有 operator「{{operator_display_name}}」為了品質抽查可以查看訪談逐字稿，其他人看不到你說的內容。
+4. 若出現自傷、自殺意念或無法承受的痛苦訊號，我會停止訪談並建議你尋求專業協助（{CRISIS_HELPLINE_EXAMPLES_ZH}）。我無法處理危機層。
+5. 我們討論的內容最終會成為一個 AI 代理人。你隨時可以保留部分、全部刪除或修改某一段，並在 8 週後決定是否上線。
+6. 代理人寫出的任何內容，在法律上、社會上與責任上都屬於你，不屬於 AI。
+7. 你隨時可以撤回。撤回時可選擇保留或刪除對話紀錄；選擇刪除時，會在 24 小時內完成。
+8. 本訪談僅限年滿 18 歲者參加。
+9. 訪談內容儲存在 operator「{{operator_display_name}}」指定的主機，不會傳送到 VirtualMe／千葉熊的任何平台；但每則訊息在生成回覆時會經由 Anthropic API 處理（BYOK 模式使用你自己的 API key）。這屬跨境傳輸，請知悉。
+
+若你理解並同意以上內容，請完整回覆「{CONSENT_TEXT}」。"""
 CONSENT_ACCEPTED_REPLY = (
     "已記錄同意。接下來請提供您的 Claude API Key (sk-ant- 開頭) 以開始訪談。"
 )
 CONSENT_ACCEPTED_REPLY_OPERATOR = (
     "已記錄同意。我們現在就開始 —— 先跟我說說, 你最近的工作或生活, 過得怎麼樣?"
 )
-KEY_ACCEPTED_REPLY = "API Key 驗證成功，開始訪談。請說說您最近的工作狀況。"  # noqa: RUF001
-KEY_INVALID_REPLY = "API Key 無效，請重新提供。"  # noqa: RUF001
+KEY_ACCEPTED_REPLY = "API Key 驗證成功，開始訪談。請說說您最近的工作狀況。"
+KEY_INVALID_REPLY = "API Key 無效，請重新提供。"
 
 
 @dataclass
@@ -92,12 +101,28 @@ def _consent_path(keys_dir: str, interviewee_id: str) -> Path:
     return Path(keys_dir) / f"{digest}.consent"
 
 
+def render_consent_reply(operator_display_name: str) -> str:
+    return CONSENT_REPLY.format(operator_display_name=operator_display_name)
+
+
+def is_consent_acceptance(message: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", message).strip()
+    return _CONSENT_ACCEPTANCE_PATTERN.fullmatch(normalized) is not None
+
+
 def has_key(keys_dir: str, interviewee_id: str) -> bool:
     return _key_path(keys_dir, interviewee_id).is_file()
 
 
 def has_consent(keys_dir: str, interviewee_id: str) -> bool:
-    return _consent_path(keys_dir, interviewee_id).is_file()
+    path = _consent_path(keys_dir, interviewee_id)
+    if not path.is_file():
+        return False
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeError):
+        return False
+    return isinstance(record, dict) and record.get("version") == CONSENT_VERSION
 
 
 def read_key(keys_dir: str, interviewee_id: str) -> str | None:
@@ -120,14 +145,27 @@ def store_key(keys_dir: str, interviewee_id: str, api_key: str) -> None:
     os.chmod(path, 0o600)
 
 
-def store_consent(keys_dir: str, interviewee_id: str) -> None:
+def store_consent(
+    keys_dir: str,
+    interviewee_id: str,
+    consent_text: str | None = None,
+) -> None:
     dir_path = Path(keys_dir)
     dir_path.mkdir(parents=True, exist_ok=True)
     os.chmod(dir_path, 0o700)
     path = _consent_path(keys_dir, interviewee_id)
+    rendered_consent = (
+        consent_text if consent_text is not None else render_consent_reply("operator")
+    )
+    record = {
+        "version": CONSENT_VERSION,
+        "text_sha256": hashlib.sha256(rendered_consent.encode("utf-8")).hexdigest(),
+        "agreed_at": datetime.now(UTC).isoformat(),
+        "age_confirmed": True,
+    }
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write("agreed")
+        json.dump(record, handle, ensure_ascii=False)
     os.chmod(path, 0o600)
 
 
@@ -179,6 +217,7 @@ def run_consent_gate(
     incoming_message: str,
     keys_dir: str,
     byok_enabled: bool,
+    operator_display_name: str = "operator",
 ) -> str | None:
     """Require data-use consent before any session/turn/LLM work.
 
@@ -187,14 +226,15 @@ def run_consent_gate(
     """
     if has_consent(keys_dir, interviewee_id):
         return None
-    if incoming_message.strip() == CONSENT_TEXT:
-        store_consent(keys_dir, interviewee_id)
+    consent_reply = render_consent_reply(operator_display_name)
+    if is_consent_acceptance(incoming_message):
+        store_consent(keys_dir, interviewee_id, consent_reply)
         logger.info("Consent gate: consent accepted for %s", interviewee_id)
         if byok_enabled:
             return CONSENT_ACCEPTED_REPLY
         return CONSENT_ACCEPTED_REPLY_OPERATOR
     logger.info("Consent gate: consent prompt sent to %s", interviewee_id)
-    return CONSENT_REPLY
+    return consent_reply
 
 
 async def run_byok_gate(

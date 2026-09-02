@@ -24,6 +24,14 @@ from virtualme.interview.commands import (
     format_revoke_key_reply,
     format_status_reply,
 )
+from virtualme.interview.crisis import (
+    CRISIS_LOCKED_REPLY,
+    CRISIS_REPLY,
+    CRISIS_RESUMED_REPLY,
+    CrisisCategory,
+    detect_crisis,
+    is_resume_phrase,
+)
 from virtualme.interview.depth_evaluator import TurnKind, evaluate_depth
 from virtualme.interview.follow_up import generate_follow_up, select_rule
 from virtualme.interview.lang import INTERVIEW_OUTPUT_LANGUAGE
@@ -55,6 +63,7 @@ DEFAULT_QUESTION = Question(
     energy_tax="low",
 )
 MAX_PROBES_PER_QUESTION = 2
+OPERATOR_PAUSED_REPLY = "訪談目前由 operator 暫停中, 恢復後會通知你。"
 _LAYER_ORDER = {
     Layer.FACT: 0,
     Layer.PATTERN: 1,
@@ -79,6 +88,17 @@ class PersonaExportLineReply(str):
         obj.zip_path = zip_path
         obj.file_name = file_name
         obj.caption = caption
+        return obj
+
+
+class CrisisReply(str):
+    """Fixed crisis response plus category metadata for transport alerting."""
+
+    category: CrisisCategory
+
+    def __new__(cls, text: str, *, category: CrisisCategory):
+        obj = str.__new__(cls, text)
+        obj.category = category
         return obj
 
 
@@ -138,18 +158,32 @@ async def process_turn(
     download_base_url: str | None = None,
 ) -> str:
     settings = settings or Settings()
+    if await db.is_crisis_locked(interviewee_id):
+        if is_resume_phrase(incoming_message):
+            await db.resolve_crisis(interviewee_id)
+            return CRISIS_RESUMED_REPLY
+        return CRISIS_LOCKED_REPLY
+
+    crisis_category = detect_crisis(incoming_message)
+    if crisis_category is not None:
+        await db.record_crisis_event(interviewee_id, crisis_category.value)
+        return CrisisReply(CRISIS_REPLY, category=crisis_category)
+
     active_client = claude
     pre_gate_command = detect_command(incoming_message)
     if isinstance(pre_gate_command, RevokeKeyRequest):
         # Revocation is allowed before consent/BYOK so users can always remove
         # a stored key without first accepting more data processing terms.
         return _handle_revoke_key(interviewee_id, settings)
+    if await db.get_subject_status(interviewee_id) == "paused":
+        return OPERATOR_PAUSED_REPLY
     if settings.consent_required:
         consent_reply = byok.run_consent_gate(
             interviewee_id,
             incoming_message,
             settings.byok_keys_dir,
             settings.byok_enabled,
+            settings.operator_display_name,
         )
         if consent_reply is not None:
             return consent_reply

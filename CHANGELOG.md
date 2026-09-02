@@ -2,6 +2,13 @@
 
 All notable changes to VirtualMe are documented here.
 
+## Unreleased
+
+- Added a transcript-safe operator CLI, pause gate, local smoke test, and self-hosting runbook.
+- Added provable single-command identity deletion with pre/post scanning and PII-free receipts.
+- Added an always-on, pre-LLM crisis gate with metadata-only locking and fixed referral replies.
+- Reworked informed consent with 18+ confirmation, deployment/API disclosure, and versioned records.
+
 ## v1.1.1
 
 M2 runtime enforcement for Constitution v1.1 export/snapshot surfaces.

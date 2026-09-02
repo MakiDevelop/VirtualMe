@@ -1,16 +1,19 @@
 """Tests for the BW5 BYOK gate."""
 
+import hashlib
 import json
 import logging
 import stat
 
 import aiosqlite
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from virtualme.config import Settings
 from virtualme.interview import byok
 from virtualme.interview.bot import process_turn
+from virtualme.interview.crisis import CRISIS_HELPLINE_EXAMPLES_ZH, CRISIS_REPLY
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.storage.db import DB, Dimension, Question
 
@@ -76,6 +79,14 @@ async def _count(db: DB, table: str) -> int:
         return (await (await conn.execute(f"SELECT COUNT(*) FROM {table}")).fetchone())[0]
 
 
+def _write_consent_fixture(keys_dir, interviewee_id: str, content: str):
+    keys_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(interviewee_id.encode("utf-8")).hexdigest()
+    path = keys_dir / f"{digest}.consent"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 # --- gate-level tests --------------------------------------------------------
 
 
@@ -84,7 +95,7 @@ def test_consent_gate_prompts_before_any_storage(tmp_path):
 
     reply = byok.run_consent_gate("u1", "hello there", str(keys_dir), byok_enabled=True)
 
-    assert reply == byok.CONSENT_REPLY
+    assert reply == byok.render_consent_reply("operator")
     assert not byok.has_consent(str(keys_dir), "u1")
     assert not keys_dir.exists()
 
@@ -92,13 +103,18 @@ def test_consent_gate_prompts_before_any_storage(tmp_path):
 def test_consent_gate_accepts_exact_consent_with_restrictive_modes(tmp_path):
     keys_dir = tmp_path / "keys"
 
-    reply = byok.run_consent_gate("u1", "同意", str(keys_dir), byok_enabled=True)
+    reply = byok.run_consent_gate("u1", byok.CONSENT_TEXT, str(keys_dir), byok_enabled=True)
 
     assert reply == byok.CONSENT_ACCEPTED_REPLY
     assert byok.has_consent(str(keys_dir), "u1")
     consent_files = list(keys_dir.glob("*.consent"))
     assert len(consent_files) == 1
-    assert consent_files[0].read_text(encoding="utf-8") == "agreed"
+    record = json.loads(consent_files[0].read_text(encoding="utf-8"))
+    assert record["version"] == byok.CONSENT_VERSION
+    rendered_consent = byok.render_consent_reply("operator")
+    assert record["text_sha256"] == hashlib.sha256(rendered_consent.encode("utf-8")).hexdigest()
+    assert record["agreed_at"].endswith("+00:00")
+    assert record["age_confirmed"] is True
     assert stat.S_IMODE(consent_files[0].stat().st_mode) == 0o600
     assert stat.S_IMODE(keys_dir.stat().st_mode) == 0o700
 
@@ -108,6 +124,119 @@ def test_consent_gate_existing_consent_allows_turn_to_continue(tmp_path):
     byok.store_consent(str(keys_dir), "u1")
 
     assert byok.run_consent_gate("u1", "a normal answer", str(keys_dir), byok_enabled=True) is None
+
+
+def test_consent_reply_covers_required_terms_and_shared_crisis_resources():
+    operator_display_name = "測試營運方"
+    reply = byok.render_consent_reply(operator_display_name)
+    required_terms = (
+        "therapist-style",
+        "我是 AI",
+        "不是心理師",
+        "不是心理治療",
+        "不是心理諮商",
+        "童年",
+        "創傷",
+        "未解決的決定",
+        "skip",
+        "換題",
+        "累了",
+        "這段不要存",
+        "品質抽查",
+        "逐字稿",
+        "其他人看不到",
+        "自傷",
+        "自殺意念",
+        "無法承受的痛苦",
+        "停止",
+        "專業協助",
+        "1925",
+        "危機層",
+        "AI 代理人",
+        "保留部分",
+        "全部刪除",
+        "修改",
+        "8 週",
+        "上線",
+        "法律上",
+        "社會上",
+        "責任上",
+        "屬於你",
+        "不屬於 AI",
+        "撤回",
+        "24 小時",
+        "年滿 18 歲",
+        "VirtualMe" + "\uff0f" + "千葉熊",
+        "Anthropic API",
+        "API key",
+        "跨境傳輸",
+        operator_display_name,
+    )
+
+    assert all(term in reply for term in required_terms)
+    assert CRISIS_HELPLINE_EXAMPLES_ZH in reply
+    assert CRISIS_HELPLINE_EXAMPLES_ZH in CRISIS_REPLY
+    assert "Maki" not in reply
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        byok.CONSENT_TEXT,
+        "我已滿１８歲" + "\uff0c" + "同意開始",
+        "我已滿 18 歲" + "\uff0c" + "同意開始",
+        "我年滿18歲" + "\uff0c" + "同意開始",
+        "我年滿１８岁" + "\uff0c" + "同意開始",
+        "我年滿 18 岁" + "\uff0c" + "同意開始。",
+        "我已滿18歲, 同意開始!",
+    ],
+)
+def test_consent_gate_accepts_age_confirming_variants(tmp_path, message):
+    keys_dir = tmp_path / "keys"
+
+    reply = byok.run_consent_gate("u1", message, str(keys_dir), byok_enabled=True)
+
+    assert reply == byok.CONSENT_ACCEPTED_REPLY
+    assert byok.has_consent(str(keys_dir), "u1")
+
+
+@pytest.mark.parametrize("message", ["同意", "ok", "我同意"])
+def test_consent_gate_rejects_messages_without_age_confirmation(tmp_path, message):
+    keys_dir = tmp_path / "keys"
+
+    reply = byok.run_consent_gate("u1", message, str(keys_dir), byok_enabled=True)
+
+    assert reply == byok.render_consent_reply("operator")
+    assert not byok.has_consent(str(keys_dir), "u1")
+
+
+def test_consent_gate_reprompts_old_version_json(tmp_path):
+    keys_dir = tmp_path / "keys"
+    _write_consent_fixture(
+        keys_dir,
+        "u1",
+        json.dumps({"version": "2026-08-31", "age_confirmed": True}),
+    )
+
+    reply = byok.run_consent_gate("u1", "a normal answer", str(keys_dir), byok_enabled=True)
+
+    assert reply == byok.render_consent_reply("operator")
+    assert not byok.has_consent(str(keys_dir), "u1")
+
+
+def test_operator_display_name_changes_consent_reply(tmp_path):
+    keys_dir = tmp_path / "keys"
+
+    first = byok.run_consent_gate(
+        "u1", "hello", str(keys_dir), byok_enabled=True, operator_display_name="甲方主機"
+    )
+    second = byok.run_consent_gate(
+        "u2", "hello", str(keys_dir), byok_enabled=True, operator_display_name="乙方主機"
+    )
+
+    assert first != second
+    assert first is not None and "甲方主機" in first and "乙方主機" not in first
+    assert second is not None and "乙方主機" in second and "甲方主機" not in second
 
 
 async def test_gate_no_key_normal_message_returns_onboarding(tmp_path):
@@ -244,7 +373,7 @@ async def test_process_turn_consent_required_before_byok_onboarding(tmp_path, mo
     monkeypatch.setattr(byok, "build_client", boom)
     reply = await process_turn("u1", "hello", object(), db, _selector(), settings)
 
-    assert reply == byok.CONSENT_REPLY
+    assert reply == byok.render_consent_reply("operator")
     assert await _count(db, "turns") == 0
     assert await _count(db, "sessions") == 0
 
@@ -256,12 +385,13 @@ async def test_process_turn_consent_required_with_operator_key(tmp_path):
         byok_enabled=False,
         consent_required=True,
         byok_keys_dir=str(tmp_path / "keys"),
+        operator_display_name="測試營運方",
     )
     operator_client = _Claude()
 
     reply = await process_turn("u1", "hello", operator_client, db, _selector(), settings)
 
-    assert reply == byok.CONSENT_REPLY
+    assert reply == byok.render_consent_reply("測試營運方")
     assert operator_client.messages.calls == 0
     assert await _count(db, "turns") == 0
     assert await _count(db, "sessions") == 0
@@ -281,7 +411,7 @@ async def test_process_turn_existing_key_still_requires_consent(tmp_path, monkey
 
     reply = await process_turn("u1", "a normal answer", object(), db, _selector(), settings)
 
-    assert reply == byok.CONSENT_REPLY
+    assert reply == byok.render_consent_reply("operator")
     assert interviewee_client.messages.calls == 0
     assert await _count(db, "turns") == 0
     assert await _count(db, "sessions") == 0
@@ -296,10 +426,30 @@ async def test_process_turn_consent_acceptance_writes_no_turns(tmp_path):
         byok_keys_dir=str(tmp_path / "keys"),
     )
 
-    reply = await process_turn("u1", "同意", object(), db, _selector(), settings)
+    reply = await process_turn("u1", byok.CONSENT_TEXT, object(), db, _selector(), settings)
 
     assert reply == byok.CONSENT_ACCEPTED_REPLY_OPERATOR
     assert byok.has_consent(settings.byok_keys_dir, "u1")
+    assert await _count(db, "turns") == 0
+    assert await _count(db, "sessions") == 0
+
+
+async def test_process_turn_legacy_consent_reprompts_without_turns_or_llm(tmp_path):
+    db = await _new_db(tmp_path)
+    keys_dir = tmp_path / "keys"
+    _write_consent_fixture(keys_dir, "u1", "agreed")
+    settings = Settings(
+        anthropic_api_key=SecretStr("operator-key"),
+        byok_enabled=False,
+        consent_required=True,
+        byok_keys_dir=str(keys_dir),
+    )
+    operator_client = _Claude()
+
+    reply = await process_turn("u1", "a normal answer", operator_client, db, _selector(), settings)
+
+    assert reply == byok.render_consent_reply("operator")
+    assert operator_client.messages.calls == 0
     assert await _count(db, "turns") == 0
     assert await _count(db, "sessions") == 0
 
