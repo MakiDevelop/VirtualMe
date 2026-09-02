@@ -23,6 +23,12 @@ from virtualme.interview.turn_state import (
 )
 from virtualme.storage.db import DB, Dimension, SubjectDomain
 
+TEST_QUESTION_POOL_PATH = Path(__file__).parents[1] / "fixtures/question-pool-test.yaml"
+
+
+def _load_test_question_pool():
+    return load_question_pool(TEST_QUESTION_POOL_PATH)
+
 
 @pytest.fixture
 def tmp_db_path() -> Path:
@@ -41,8 +47,8 @@ async def fresh_db(tmp_db_path: Path) -> DB:
 
 @pytest.fixture
 def selector() -> QuestionSelector:
-    """Real question pool (from src/virtualme/data/question-pool.yaml)."""
-    pool = load_question_pool()
+    """Multi-question neutral fixture pool for TurnState behavior tests."""
+    pool = _load_test_question_pool()
     assert pool, "question pool must not be empty for tests"
     return QuestionSelector(pool)
 
@@ -59,7 +65,7 @@ async def _setup_minimal_session(
     )
     session = await db.get_or_create_session(interviewee_id, week=week)
     # pick first question of the week as "current"
-    first_q = QuestionSelector(load_question_pool()).question_pool.get(
+    first_q = QuestionSelector(_load_test_question_pool()).question_pool.get(
         week, [None]
     )[0]
     if first_q:

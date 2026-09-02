@@ -4,6 +4,7 @@ All notable changes to VirtualMe are documented here.
 
 ## Unreleased
 
+- Split the production question pool into an external `QUESTION_POOL_FILE` policy pack with a packaged toy fallback and fail-loud loading.
 - Added a transcript-safe operator CLI, pause gate, local smoke test, and self-hosting runbook.
 - Added provable single-command identity deletion with pre/post scanning and PII-free receipts.
 - Added an always-on, pre-LLM crisis gate with metadata-only locking and fixed referral replies.

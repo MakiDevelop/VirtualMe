@@ -1,0 +1,88 @@
+# Neutral test-only pool. These questions are independently authored fixtures.
+version: 1
+questions:
+  - id: TEST-W1-HISTORY
+    week: 1
+    dimension: HISTORY
+    text: Describe a recent activity that went as expected.
+    energy_tax: low
+  - id: TEST-W1-STATE
+    week: 1
+    dimension: STATE
+    text: What pace would work well for this conversation today?
+    energy_tax: low
+  - id: TEST-W1-SKILL
+    week: 1
+    dimension: SKILL
+    text: What is one small task you could demonstrate step by step?
+    energy_tax: low
+  - id: TEST-W2-VOICE
+    week: 2
+    dimension: VOICE
+    text: How do you usually make a technical explanation easier to follow?
+    energy_tax: mid
+  - id: TEST-W2-SKILL
+    week: 2
+    dimension: SKILL
+    text: What is a simple method you use to practice a new skill?
+    energy_tax: mid
+  - id: TEST-W3-PEOPLE
+    week: 3
+    dimension: PEOPLE
+    text: What makes collaboration feel clear and predictable to you?
+    energy_tax: mid
+  - id: TEST-W3-BOUNDARIES
+    week: 3
+    dimension: BOUNDARIES
+    text: How do you signal that your current workload is full?
+    energy_tax: mid
+  - id: TEST-W4-SOUL
+    week: 4
+    dimension: SOUL
+    text: Which everyday contribution do you find worthwhile?
+    energy_tax: mid
+  - id: TEST-W4-JOURNAL
+    week: 4
+    dimension: JOURNAL
+    text: What ordinary detail caught your attention recently?
+    energy_tax: low
+  - id: TEST-W5-HISTORY
+    week: 5
+    dimension: HISTORY
+    text: What is one routine you have changed over time?
+    energy_tax: low
+  - id: TEST-W5-SKILL
+    week: 5
+    dimension: SKILL
+    text: How do you check whether a new approach is working?
+    energy_tax: mid
+  - id: TEST-W6-PEOPLE
+    week: 6
+    dimension: PEOPLE
+    text: How do you like a group to make small decisions?
+    energy_tax: low
+  - id: TEST-W6-VOICE
+    week: 6
+    dimension: VOICE
+    text: What tone do you prefer when writing a brief update?
+    energy_tax: low
+  - id: TEST-W7-BOUNDARIES
+    week: 7
+    dimension: BOUNDARIES
+    text: What information helps you decide when to postpone a request?
+    energy_tax: mid
+  - id: TEST-W7-SOUL
+    week: 7
+    dimension: SOUL
+    text: What quality do you appreciate in careful work?
+    energy_tax: mid
+  - id: TEST-W8-JOURNAL
+    week: 8
+    dimension: JOURNAL
+    text: What would you like to remember from this week?
+    energy_tax: low
+  - id: TEST-W8-STATE
+    week: 8
+    dimension: STATE
+    text: Would you prefer a shorter or longer question right now?
+    energy_tax: low

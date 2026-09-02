@@ -41,6 +41,7 @@ VIRTUALME_BYOK_ENABLED=false
 VIRTUALME_BYOK_KEYS_DIR=./data/keys
 VIRTUALME_PERSONA_EXPORT_DIR=./data/personas
 VIRTUALME_SNAPSHOT_EXPORT_DIR=./exports
+QUESTION_POOL_FILE=/absolute/path/to/private/question-pool.yaml
 ```
 
 | 變數 | 現有程式行為 |
@@ -53,7 +54,7 @@ VIRTUALME_SNAPSHOT_EXPORT_DIR=./exports
 | `VIRTUALME_PERSONA_EXPORT_DIR` | persona markdown、local-only git 與 zip。內容是衍生人格資料，仍須視為敏感資料。 |
 | `DATABASE_URL` | 目前只支援 `sqlite:///...`；`turns` 與 `redactions.original` 在這個 SQLite。 |
 | `REASONER_PROMPT_FILE` | 選用的本機 prompt 檔；只有 `REASONING_TURN_ENABLED=true` 且 id 在 `REASONING_TEST_USER_IDS` 時使用。路徑不存在會在該路徑首次執行時失敗。 |
-| 題庫路徑 | 現在固定由 `src/virtualme/data/question-pool.yaml` 的 package resource 載入，沒有環境變數可換路徑。若客戶版另有 private policy plugin，接法目前需確認，不要自行杜撰 env 名稱。 |
+| `QUESTION_POOL_FILE` | 正式部署請指向 repo 外的 private policy pack YAML；相對路徑以啟動程序的工作目錄解析。未設定時只會載入 package 內的 8 題 toy pool。指定路徑不存在、不可讀或 YAML 無法載入時會直接失敗，絕不靜默回退 toy pool。 |
 
 BYOK 模式另設：
 

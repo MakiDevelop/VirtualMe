@@ -1,5 +1,6 @@
 import pytest
 
+from virtualme.config import Settings
 from virtualme.interview.question_selector import (
     QuestionSelector,
     default_question_pool_path,
@@ -203,16 +204,44 @@ def test_non_adaptive_keeps_existing_week_fallback_behavior():
     assert selected.id == "S1"
 
 
-def test_load_packaged_question_pool_uses_current_yaml_shape():
+def test_load_packaged_question_pool_is_eight_week_toy_pool():
     pool = load_question_pool()
 
     assert default_question_pool_path().name == "question-pool.yaml"
-    assert 1 in pool
-    assert pool[1][0].id == "H1"
-    assert pool[1][0].dimension == Dimension.HISTORY
-    all_text = "\n".join(question.text for questions in pool.values() for question in questions)
-    assert "{decision_partner}" not in all_text
-    assert "the person you negotiate scope or budget with" in all_text
+    assert set(pool) == set(range(1, 9))
+    assert all(len(questions) == 1 for questions in pool.values())
+    questions = [question for week in pool.values() for question in week]
+    assert {question.dimension for question in questions} == set(Dimension)
+    assert all(question.id.startswith("TOY-") for question in questions)
+
+
+def test_load_question_pool_uses_settings_env_alias(monkeypatch, tmp_path):
+    path = tmp_path / "private-policy-pack.yaml"
+    path.write_text(
+        """
+        questions:
+          - id: CONFIGURED-1
+            week: 1
+            dimension: STATE
+            text: What would make this conversation useful today?
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("QUESTION_POOL_FILE", str(path))
+    settings = Settings(anthropic_api_key="test")
+
+    pool = load_question_pool(settings=settings)
+
+    assert default_question_pool_path(settings) == path
+    assert pool[1][0].id == "CONFIGURED-1"
+
+
+def test_load_question_pool_does_not_fallback_when_configured_path_is_missing(tmp_path):
+    missing = tmp_path / "missing.yaml"
+    settings = Settings(anthropic_api_key="test", question_pool_file=str(missing))
+
+    with pytest.raises(FileNotFoundError, match="Question pool file does not exist"):
+        load_question_pool(settings=settings)
 
 
 def test_load_question_pool_supports_legacy_root_list(tmp_path):
