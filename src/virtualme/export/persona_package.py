@@ -33,6 +33,8 @@ async def build_persona_export_package(
     export_dir: str,
     snapshot: CoverageSnapshot,
     now: datetime | None = None,
+    *,
+    package_subdir: str | None = None,
 ) -> PersonaExportPackage:
     """Export persona markdown, add the user-facing note, commit, and zip files."""
     exported_at = now.astimezone(_TAIPEI) if now else datetime.now(_TAIPEI)
@@ -45,10 +47,18 @@ async def build_persona_export_package(
     )
 
     file_name = f"VirtualMe_人格檔_{exported_at:%Y%m%d}.zip"
-    zip_dir = Path(export_dir) / "_packages" / interviewee_id
+    package_identity = package_subdir or interviewee_id
+    if (
+        not package_identity
+        or Path(package_identity).name != package_identity
+        or package_identity in {".", ".."}
+    ):
+        raise ValueError("Invalid persona package directory")
+    zip_dir = Path(export_dir) / "_packages" / package_identity
     zip_dir.mkdir(parents=True, exist_ok=True)
     zip_path = zip_dir / file_name
     _write_zip(zip_path, written, Path(export_dir) / interviewee_id)
+    await db.increment_subject_export_count(interviewee_id)
     return PersonaExportPackage(
         zip_path=zip_path,
         file_name=file_name,
