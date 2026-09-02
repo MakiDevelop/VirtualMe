@@ -1,10 +1,11 @@
 ---
 schema_version: "0.5"
 dimension: SKILL
-exported_at: 2026-05-31T06:28:05+00:00
+exported_at: 2026-09-02T02:48:52+00:00
 anchor_count: 3
-triangulated_count: 0
-emerging_count: 3
+validated_or_cross_session_count: 0
+recurring_unvalidated_count: 1
+emerging_count: 2
 anchor_content_pii_scrubbed: true
 ---
 
@@ -12,51 +13,67 @@ anchor_content_pii_scrubbed: true
 
 Domain know-how, practices, and task preferences.
 
-## Core Truths
+## Validated Patterns
 
-_(no core truths yet)_
+_Only patterns with cross-session evidence appear here; provenance shows whether human validation is still missing._
+
+_(no validated patterns yet)_
+
+## Recurring but Unvalidated Patterns
+
+_These need cross-session validation before they can be treated as stable._
+
+-
+
+  > Within one synthetic session, the maker repeatedly preferred CLI plus plain files over heavy frameworks, especially for tools that should survive vendor changes.
+
+  <details>
+  <summary>Provenance</summary>
+
+  - Layer: principle
+  - Legacy triangulated: yes
+  - Promotion tier: recurring
+  - Promotion reason: recurring across questions, but not cross-session validated
+  - Missing evidence: cross_session_evidence, human_validation
+  - Questions: Q16, Q30, Q38
+  - Turns: 29, 30, 31
+
+  </details>
+
 
 ## Emerging Patterns
 
 -
 
-  > Builds multi-agent systems with CLI + plain files instead of heavy frameworks; values things that still run when a vendor disappears.
-
-  <details>
-  <summary>Provenance</summary>
-
-  - Layer: pattern
-  - Status: emerging
-  - Questions: Q16, Q30
-  - Turns: 11
-
-  </details>
-
--
-
-  > Runs a small home lab (single mini server + a VPS) with Docker; treats infrastructure as replaceable cattle, not pets.
+  > One synthetic answer described a small fictional lab made of one mini server and one VPS, both running Docker.
 
   <details>
   <summary>Provenance</summary>
 
   - Layer: fact
-  - Status: emerging
+  - Legacy triangulated: no
+  - Promotion tier: observed
+  - Promotion reason: single observation or weak evidence
+  - Missing evidence: repeated_question_evidence, cross_session_evidence
   - Questions: Q17
-  - Turns: 12
+  - Turns: 32
 
   </details>
 
 -
 
-  > 熟悉本地 LLM 部署、向量檢索與 RAG pipeline。
+  > One synthetic answer mentioned experimenting with local language models, vector search, and a small RAG pipeline.
 
   <details>
   <summary>Provenance</summary>
 
   - Layer: fact
-  - Status: emerging
+  - Legacy triangulated: no
+  - Promotion tier: observed
+  - Promotion reason: single observation or weak evidence
+  - Missing evidence: repeated_question_evidence, cross_session_evidence
   - Questions: Q23
-  - Turns: 13
+  - Turns: 33
 
   </details>
 

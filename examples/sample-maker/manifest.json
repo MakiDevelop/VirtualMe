@@ -1,8 +1,8 @@
 {
   "schema_version": "0.5",
-  "export_id": "1d7957d9-e727-43bc-8838-d4f79cfac0b7",
+  "export_id": "22104b34-5b17-493a-ba62-779c9a477f4d",
   "interviewee_id": "sample-maker",
-  "exported_at": "2026-05-31T06:28:05+00:00",
+  "exported_at": "2026-09-02T02:48:52+00:00",
   "persona_files": [
     "SOUL.md",
     "VOICE.md",
@@ -29,33 +29,46 @@
   "human_entrypoint": "START_HERE.md",
   "technical_index": "index.md",
   "pii_scrub_scope": "anchor_content",
+  "maturity_counts": {
+    "validated_or_cross_session": 5,
+    "recurring_unvalidated": 4,
+    "emerging": 10
+  },
   "dimensions": {
     "SOUL": {
       "file": "SOUL.md",
       "description": "Identity, values, and durable red lines.",
       "anchor_count": 4,
-      "triangulated_count": 3,
-      "emerging_count": 1
+      "triangulated_count": 4,
+      "validated_or_cross_session_count": 3,
+      "recurring_unvalidated_count": 1,
+      "emerging_count": 0
     },
     "VOICE": {
       "file": "VOICE.md",
       "description": "Voice patterns and reusable expression samples.",
       "anchor_count": 3,
-      "triangulated_count": 0,
-      "emerging_count": 3
+      "triangulated_count": 1,
+      "validated_or_cross_session_count": 0,
+      "recurring_unvalidated_count": 1,
+      "emerging_count": 2
     },
     "SKILL": {
       "file": "SKILL.md",
       "description": "Domain know-how, practices, and task preferences.",
       "anchor_count": 3,
-      "triangulated_count": 0,
-      "emerging_count": 3
+      "triangulated_count": 1,
+      "validated_or_cross_session_count": 0,
+      "recurring_unvalidated_count": 1,
+      "emerging_count": 2
     },
     "PEOPLE": {
       "file": "PEOPLE.md",
       "description": "Relationship context and recurring people schemas.",
       "anchor_count": 2,
       "triangulated_count": 0,
+      "validated_or_cross_session_count": 0,
+      "recurring_unvalidated_count": 0,
       "emerging_count": 2
     },
     "HISTORY": {
@@ -63,6 +76,8 @@
       "description": "Life events and durable personal timeline context.",
       "anchor_count": 2,
       "triangulated_count": 0,
+      "validated_or_cross_session_count": 0,
+      "recurring_unvalidated_count": 0,
       "emerging_count": 2
     },
     "JOURNAL": {
@@ -70,13 +85,17 @@
       "description": "Reflections, interpretations, and periodic event notes.",
       "anchor_count": 0,
       "triangulated_count": 0,
+      "validated_or_cross_session_count": 0,
+      "recurring_unvalidated_count": 0,
       "emerging_count": 0
     },
     "BOUNDARIES": {
       "file": "BOUNDARIES.md",
       "description": "Refusals, privacy rules, and persona update protocol.",
-      "anchor_count": 3,
-      "triangulated_count": 2,
+      "anchor_count": 4,
+      "triangulated_count": 3,
+      "validated_or_cross_session_count": 2,
+      "recurring_unvalidated_count": 1,
       "emerging_count": 1
     },
     "STATE": {
@@ -84,49 +103,51 @@
       "description": "Current-state snapshot that may become stale over time.",
       "anchor_count": 1,
       "triangulated_count": 0,
+      "validated_or_cross_session_count": 0,
+      "recurring_unvalidated_count": 0,
       "emerging_count": 1
     }
   },
   "payload_files": {
     "BOUNDARIES.md": {
-      "sha256": "sha256:6197ecb310e6b29120a27ccaba7bd90b9494150f162809d9999f3d06765de5ad",
-      "bytes": 1033
+      "sha256": "sha256:3095a1bbaa9e471cefe65e24d05d17a86f1e13623dffa7a1ba65d3c07152f381",
+      "bytes": 2413
     },
     "HISTORY.md": {
-      "sha256": "sha256:7758a0bfcb71240ad766555095335c33bb49e315a1f2acbe9a6c08bf692971b7",
-      "bytes": 777
+      "sha256": "sha256:905aa3e7e404ff3a94c7d3753f6955af3832c1d83db3e4d2284ff65980387774",
+      "bytes": 1421
     },
     "JOURNAL.md": {
-      "sha256": "sha256:9a243eb9bbeeca72230fa077993db8d013abae7fce87b43e95c41f65ebf9940b",
-      "bytes": 338
+      "sha256": "sha256:8333837e18f6cd9dcc3968d97eeb31a5c25fd011ef916ef9c96044a1bad9ebdb",
+      "bytes": 597
     },
     "PEOPLE.md": {
-      "sha256": "sha256:8f7e1e1400655cd7033a9114f14570382084cdb6104e45d1367d1e18d7d4ed46",
-      "bytes": 771
+      "sha256": "sha256:757bba7f5a436a6334de484dc24b12857eca537c855f1ecb46a92c0eb63f159f",
+      "bytes": 1404
     },
     "SKILL.md": {
-      "sha256": "sha256:f8e4b16c6a305ca19e41b39e2e5e32906ad34f66598819391400411f99244f03",
-      "bytes": 1032
+      "sha256": "sha256:c4a2fa04cfd9864e8374977135ff7674f01de5cea9b34c3bb251759deb1dd267",
+      "bytes": 1934
     },
     "SOUL.md": {
-      "sha256": "sha256:72c746dae91197e02c17d23e7f66e89c690bb8cd9cacdfa983eddf8e5306c076",
-      "bytes": 1374
+      "sha256": "sha256:19bcbf46f012ee00edd9cce19168a749e5877a321c68d750f8e95a727404feba",
+      "bytes": 2589
     },
     "START_HERE.md": {
-      "sha256": "sha256:899d80b3a119d902795a57ee81cf909716c0075e8c36e8d5b8d5b35d28063aa8",
-      "bytes": 1541
+      "sha256": "sha256:6b0c7af24b1c8e96765ba9395b05330e3dfd654bf67e7f8f7f32c61acb599a5f",
+      "bytes": 1620
     },
     "STATE.md": {
-      "sha256": "sha256:b15f4dbc1160880b867dba5b8fcd8701f8f08dca20a0959cde609b3234489819",
-      "bytes": 544
+      "sha256": "sha256:faa34fdd8696c6266d533ab4478211fd9bded726799f70a13ca20ac81fe20da7",
+      "bytes": 1011
     },
     "VOICE.md": {
-      "sha256": "sha256:781d9c1255e226675b9a578770d30d1e63f7eedaaae7e80061e945f689b83ff2",
-      "bytes": 1044
+      "sha256": "sha256:165972e3a59110d8df911530ddb89e7f49c5ba2b49f06387c347b770777973e3",
+      "bytes": 1976
     },
     "index.md": {
-      "sha256": "sha256:dc522cb4105b46945ecf91d21c0a0f3b8913a316a8fe8bbc48f085bb52c5a811",
-      "bytes": 584
+      "sha256": "sha256:15b0619e559752cd0740d115769a778f320e9733129f0f0f78e498d9204c23d1",
+      "bytes": 987
     }
   }
 }

@@ -1,9 +1,10 @@
 ---
 schema_version: "0.5"
 dimension: HISTORY
-exported_at: 2026-05-31T06:28:05+00:00
+exported_at: 2026-09-02T02:48:52+00:00
 anchor_count: 2
-triangulated_count: 0
+validated_or_cross_session_count: 0
+recurring_unvalidated_count: 0
 emerging_count: 2
 anchor_content_pii_scrubbed: true
 ---
@@ -12,37 +13,49 @@ anchor_content_pii_scrubbed: true
 
 Life events and durable personal timeline context.
 
-## Core Truths
+## Validated Patterns
 
-_(no core truths yet)_
+_Only patterns with cross-session evidence appear here; provenance shows whether human validation is still missing._
+
+_(no validated patterns yet)_
+
+## Recurring but Unvalidated Patterns
+
+_(no recurring unvalidated patterns yet)_
 
 ## Emerging Patterns
 
 -
 
-  > Moved from a sales/operations role into product, then into building personal AI infrastructure as a long-running side project.
+  > One synthetic answer described a fictional career path from operations to product work, then to personal AI tooling as a side project.
 
   <details>
   <summary>Provenance</summary>
 
   - Layer: fact
-  - Status: emerging
+  - Legacy triangulated: no
+  - Promotion tier: observed
+  - Promotion reason: single observation or weak evidence
+  - Missing evidence: repeated_question_evidence, cross_session_evidence
   - Questions: Q01
-  - Turns: 16
+  - Turns: 36
 
   </details>
 
 -
 
-  > 曾把一個副專案從 demo 養成有真實使用者的小產品。
+  > One synthetic answer described growing a fictional side project from a demo into a tiny product with test users.
 
   <details>
   <summary>Provenance</summary>
 
   - Layer: fact
-  - Status: emerging
+  - Legacy triangulated: no
+  - Promotion tier: observed
+  - Promotion reason: single observation or weak evidence
+  - Missing evidence: repeated_question_evidence, cross_session_evidence
   - Questions: Q02
-  - Turns: 17
+  - Turns: 37
 
   </details>
 
