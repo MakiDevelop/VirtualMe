@@ -132,6 +132,22 @@ _EN_REPORTED_SPEECH = re.compile(
     re.IGNORECASE,
 )
 
+_SELF_HARM_EXAGGERATION_SUFFIX_LENGTH = 6
+_SELF_HARM_EXAGGERATION_MARKERS = (
+    "喔",
+    "欸",
+    "啦",
+    "哈",
+    "ww",
+    "xd",
+    "笑死",
+    "🤣",
+    "😂",
+)
+_SELF_HARM_INTENSITY_MARKERS = ("真的", "一直", "每天", "認真")
+_DISSOCIATION_CONTEXT_RADIUS = 12
+_DISSOCIATION_CURRENT_STATE_MARKERS = ("現在", "感覺", "開始", "又", "正在")
+
 _RESUME_EDGE_CHARS = string.punctuation + "，。！？、；：…～「」『』（）【】《》〈〉"
 
 CRISIS_HELPLINE_EXAMPLES_EN = "988 in the US, 1925 in\n  Taiwan, Samaritans in the UK"
@@ -172,6 +188,29 @@ def _is_protected_match(text: str, start: int, end: int) -> bool:
     )
 
 
+def _is_colloquial_death_exaggeration(text: str, start: int, end: int) -> bool:
+    suffix = text[end : end + _SELF_HARM_EXAGGERATION_SUFFIX_LENGTH]
+    has_exaggeration_marker = any(
+        marker in suffix for marker in _SELF_HARM_EXAGGERATION_MARKERS
+    )
+    prefix = text[:start]
+    has_intensity_marker = any(
+        marker in prefix for marker in _SELF_HARM_INTENSITY_MARKERS
+    )
+    return has_exaggeration_marker and not has_intensity_marker
+
+
+def _has_dissociation_context(text: str, start: int, end: int) -> bool:
+    prefix = text[max(0, start - _DISSOCIATION_CONTEXT_RADIUS) : start]
+    context = text[
+        max(0, start - _DISSOCIATION_CONTEXT_RADIUS) : end
+        + _DISSOCIATION_CONTEXT_RADIUS
+    ]
+    return "我" in prefix or any(
+        marker in context for marker in _DISSOCIATION_CURRENT_STATE_MARKERS
+    )
+
+
 def detect_crisis(text: str) -> CrisisCategory | None:
     """Return the first explicit crisis category without calling external services."""
     normalized = _normalize(text)
@@ -181,8 +220,22 @@ def detect_crisis(text: str) -> CrisisCategory | None:
     for category in CrisisCategory:
         for pattern in _COMPILED_PATTERNS[category]:
             for match in pattern.finditer(normalized):
-                if not _is_protected_match(normalized, match.start(), match.end()):
-                    return category
+                start, end = match.span()
+                if _is_protected_match(normalized, start, end):
+                    continue
+                if (
+                    category is CrisisCategory.SELF_HARM
+                    and match.group() == "想死"
+                    and _is_colloquial_death_exaggeration(normalized, start, end)
+                ):
+                    continue
+                if (
+                    category is CrisisCategory.PANIC_DISSOCIATION
+                    and match.group() == "解離"
+                    and not _has_dissociation_context(normalized, start, end)
+                ):
+                    continue
+                return category
     return None
 
 

@@ -188,6 +188,39 @@ def test_false_positive_set_does_not_trigger(message: str):
     assert detect_crisis(message) is None
 
 
+@pytest.mark.parametrize(
+    "message",
+    (
+        "好想死喔這題",
+        "想死XD",
+        "笑死我想死欸",
+        "解離這個概念我看過",
+        "課本說解離",
+        "書上寫解離",
+    ),
+)
+def test_context_sensitive_false_positives_do_not_trigger(message: str):
+    assert detect_crisis(message) is None
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_category"),
+    (
+        ("我真的想死", CrisisCategory.SELF_HARM),
+        ("我一直想死", CrisisCategory.SELF_HARM),
+        ("想死", CrisisCategory.SELF_HARM),
+        ("我真的想死喔", CrisisCategory.SELF_HARM),
+        ("我每天都想死啦", CrisisCategory.SELF_HARM),
+        ("我最近常常解離", CrisisCategory.PANIC_DISSOCIATION),
+        ("我感覺自己在解離", CrisisCategory.PANIC_DISSOCIATION),
+    ),
+)
+def test_context_sensitive_crisis_mentions_trigger(
+    message: str, expected_category: CrisisCategory
+):
+    assert detect_crisis(message) is expected_category
+
+
 def test_each_category_has_at_least_five_patterns_per_language():
     assert set(CRISIS_PATTERNS) == set(CrisisCategory)
     for languages in CRISIS_PATTERNS.values():
