@@ -97,6 +97,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("reasoner_prompt_file", "REASONER_PROMPT_FILE"),
     )
+    question_pool_file: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("question_pool_file", "QUESTION_POOL_FILE"),
+    )
     snapshot_export_dir: str = Field(
         "./exports",
         validation_alias=AliasChoices("snapshot_export_dir", "VIRTUALME_SNAPSHOT_EXPORT_DIR"),

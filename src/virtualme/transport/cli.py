@@ -9,8 +9,8 @@ from virtualme.interview.question_selector import QuestionSelector, load_questio
 from virtualme.storage.db import DB
 
 
-def _selector() -> QuestionSelector:
-    return QuestionSelector(load_question_pool())
+def _selector(settings: Settings) -> QuestionSelector:
+    return QuestionSelector(load_question_pool(settings=settings))
 
 
 async def main() -> None:
@@ -22,7 +22,7 @@ async def main() -> None:
     settings = Settings()
     db = DB(sqlite_path(settings.database_url))
     claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value(), max_retries=4)
-    selector = _selector()
+    selector = _selector(settings)
     interviewee_id = args.interviewee
     print("VirtualMe CLI. Ctrl-D to exit.")
     while True:

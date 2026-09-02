@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 db = DB(sqlite_path(settings.database_url))
 claude = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value(), max_retries=4)
-selector = QuestionSelector(load_question_pool())
+selector = QuestionSelector(load_question_pool(settings=settings))
 try:
     responder_persona = (
         load_persona(settings.persona_archive_dir) if settings.persona_archive_dir else None

@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from virtualme.config import Settings
 from virtualme.storage.db import Anchor, Dimension, Question, Session
 
 
@@ -50,13 +51,28 @@ class QuestionSelector:
         return _prefer_dimension(candidates, target, asked) or fallback
 
 
-def default_question_pool_path() -> Path:
+def default_question_pool_path(settings: Settings | None = None) -> Path:
+    if settings and settings.question_pool_file:
+        return Path(settings.question_pool_file).expanduser()
     return Path(str(files("virtualme").joinpath("data/question-pool.yaml")))
 
 
-def load_question_pool(path: str | Path | None = None) -> dict[int, list[Question]]:
-    source = default_question_pool_path() if path is None else Path(path)
-    raw = yaml.safe_load(source.read_text(encoding="utf-8")) or []
+def load_question_pool(
+    path: str | Path | None = None,
+    *,
+    settings: Settings | None = None,
+) -> dict[int, list[Question]]:
+    source = default_question_pool_path(settings) if path is None else Path(path).expanduser()
+    if not source.is_file():
+        raise FileNotFoundError(f"Question pool file does not exist: {source}")
+    try:
+        content = source.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise OSError(f"Question pool file could not be read: {source}") from exc
+    try:
+        raw = yaml.safe_load(content) or []
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Question pool YAML could not be parsed: {source}") from exc
     items = _question_items(raw)
     placeholders = _default_placeholders(raw)
     pool: dict[int, list[Question]] = {}
