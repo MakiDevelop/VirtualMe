@@ -53,6 +53,7 @@ class SubjectStatus(StrEnum):
     DEPLOYED = "deployed"
     EVALUATED = "evaluated"
     DONE = "done"
+    PAUSED = "paused"
 
 
 class Verdict(StrEnum):
@@ -276,6 +277,43 @@ async def _apply_schema_migrations(conn: aiosqlite.Connection) -> None:
                 if "duplicate column" not in str(exc).lower():
                     raise
 
+    cursor = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='subjects'"
+    )
+    if await cursor.fetchone():
+        cursor = await conn.execute("PRAGMA table_info(subjects)")
+        existing_subject_columns = {row[1] for row in await cursor.fetchall()}
+        subject_migrations: list[tuple[str, str]] = [
+            (
+                "paused_from_status",
+                "ALTER TABLE subjects ADD COLUMN paused_from_status TEXT",
+            ),
+            (
+                "export_count",
+                "ALTER TABLE subjects "
+                "ADD COLUMN export_count INTEGER NOT NULL DEFAULT 0",
+            ),
+        ]
+        for column_name, sql in subject_migrations:
+            if column_name in existing_subject_columns:
+                continue
+            try:
+                await conn.execute(sql)
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS crisis_events (
+            id INTEGER PRIMARY KEY,
+            interviewee_id TEXT NOT NULL,
+            category TEXT NOT NULL,
+            ts TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT
+        )
+        """
+    )
     await conn.execute(
         """
         CREATE TABLE IF NOT EXISTS transport_events (
@@ -414,6 +452,110 @@ class DB:
                 )
             ).fetchone()
         return _subject_from_row(row) if row else None
+
+    async def get_subject_status(self, interviewee_id: str) -> str | None:
+        await self.init()
+        async with self._connect() as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT status FROM subjects WHERE interviewee_id = ?",
+                    (interviewee_id,),
+                )
+            ).fetchone()
+        return str(row[0]) if row else None
+
+    async def set_subject_status(self, interviewee_id: str, status: str) -> str:
+        allowed = {candidate.value for candidate in SubjectStatus}
+        if status not in allowed:
+            raise ValueError(f"invalid subject status: {status}")
+
+        await self.init()
+        async with self._connect() as conn:
+            if status == SubjectStatus.PAUSED:
+                await conn.execute(
+                    """
+                    INSERT INTO subjects(interviewee_id, status, paused_from_status)
+                    VALUES (?, 'paused', 'extracting')
+                    ON CONFLICT(interviewee_id) DO UPDATE SET
+                        paused_from_status = CASE
+                            WHEN subjects.status = 'paused'
+                                THEN subjects.paused_from_status
+                            ELSE subjects.status
+                        END,
+                        status = 'paused',
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (interviewee_id,),
+                )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO subjects(interviewee_id, status)
+                    VALUES (?, ?)
+                    ON CONFLICT(interviewee_id) DO UPDATE SET
+                        status = excluded.status,
+                        paused_from_status = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (interviewee_id, status),
+                )
+            await conn.commit()
+        return status
+
+    async def resume_subject_status(self, interviewee_id: str) -> str:
+        await self.init()
+        async with self._connect() as conn:
+            await conn.execute(
+                "INSERT OR IGNORE INTO subjects(interviewee_id) VALUES (?)",
+                (interviewee_id,),
+            )
+            await conn.execute(
+                """
+                UPDATE subjects
+                SET status = CASE
+                        WHEN status = 'paused'
+                            THEN COALESCE(paused_from_status, 'extracting')
+                        ELSE status
+                    END,
+                    paused_from_status = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE interviewee_id = ?
+                """,
+                (interviewee_id,),
+            )
+            row = await (
+                await conn.execute(
+                    "SELECT status FROM subjects WHERE interviewee_id = ?",
+                    (interviewee_id,),
+                )
+            ).fetchone()
+            await conn.commit()
+        return str(row[0])
+
+    async def increment_subject_export_count(self, interviewee_id: str) -> int:
+        await self.init()
+        async with self._connect() as conn:
+            await conn.execute(
+                "INSERT OR IGNORE INTO subjects(interviewee_id) VALUES (?)",
+                (interviewee_id,),
+            )
+            await conn.execute(
+                """
+                UPDATE subjects
+                SET export_count = export_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE interviewee_id = ?
+                """,
+                (interviewee_id,),
+            )
+            row = await (
+                await conn.execute(
+                    "SELECT export_count FROM subjects WHERE interviewee_id = ?",
+                    (interviewee_id,),
+                )
+            ).fetchone()
+            await conn.commit()
+        return int(row[0])
 
     async def update_subject(
         self,
@@ -559,6 +701,58 @@ class DB:
                 )
             ).fetchone()
         return Session(**dict(row))
+
+    async def has_any_session(self, interviewee_id: str) -> bool:
+        await self.init()
+        async with self._connect() as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT 1 FROM sessions WHERE interviewee_id = ? LIMIT 1",
+                    (interviewee_id,),
+                )
+            ).fetchone()
+        return row is not None
+
+    async def record_crisis_event(self, interviewee_id: str, category: str) -> None:
+        await self.init()
+        async with self._connect() as conn:
+            await conn.execute(
+                """
+                INSERT INTO crisis_events(interviewee_id, category)
+                VALUES (?, ?)
+                """,
+                (interviewee_id, str(category)),
+            )
+            await conn.commit()
+
+    async def is_crisis_locked(self, interviewee_id: str) -> bool:
+        await self.init()
+        async with self._connect() as conn:
+            row = await (
+                await conn.execute(
+                    """
+                    SELECT 1
+                    FROM crisis_events
+                    WHERE interviewee_id = ? AND resolved_at IS NULL
+                    LIMIT 1
+                    """,
+                    (interviewee_id,),
+                )
+            ).fetchone()
+        return row is not None
+
+    async def resolve_crisis(self, interviewee_id: str) -> None:
+        await self.init()
+        async with self._connect() as conn:
+            await conn.execute(
+                """
+                UPDATE crisis_events
+                SET resolved_at = CURRENT_TIMESTAMP
+                WHERE interviewee_id = ? AND resolved_at IS NULL
+                """,
+                (interviewee_id,),
+            )
+            await conn.commit()
 
     async def get_current_week(self, interviewee_id: str, max_week: int = 8) -> int:
         await self.init()

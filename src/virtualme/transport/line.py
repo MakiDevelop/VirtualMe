@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import logging
 from collections.abc import Awaitable
+from datetime import UTC, datetime
 from typing import Any
 
 from anthropic import AsyncAnthropic
@@ -19,12 +21,13 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from virtualme.config import Settings
-from virtualme.interview.bot import INTERVIEW_ERROR_REPLY, process_turn
+from virtualme.interview.bot import INTERVIEW_ERROR_REPLY, CrisisReply, process_turn
 from virtualme.interview.question_selector import QuestionSelector
 from virtualme.storage.db import DB
 
 logger = logging.getLogger(__name__)
 _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
+INTERVIEW_CLOSED_REPLY = "VirtualMe 目前為封閉測試, 尚未對外開放。"
 
 
 async def handle_line_webhook(
@@ -83,6 +86,16 @@ async def handle_line_webhook(
             logger.error("LINE text event skipped because stable event id is missing")
             skipped += 1
             continue
+        if not await _can_access_interview(db, settings, interviewee_id):
+            logger.info("LINE interview gate rejected new user: %s", interviewee_id)
+            await _send_direct_text_reply(
+                access_token,
+                event.reply_token,
+                interviewee_id,
+                INTERVIEW_CLOSED_REPLY,
+            )
+            skipped += 1
+            continue
         if not await db.claim_transport_event(
             event_id,
             "line",
@@ -111,6 +124,36 @@ async def handle_line_webhook(
         queued += 1
 
     return {"status": "ok", "queued": queued, "duplicate": duplicate, "skipped": skipped}
+
+
+async def _can_access_interview(db: DB, settings: Settings, interviewee_id: str) -> bool:
+    if settings.is_interview_user_allowed(interviewee_id):
+        return True
+    try:
+        return await db.has_any_session(interviewee_id)
+    except Exception as exc:
+        logger.exception(
+            "LINE interview gate session lookup failed for %s; rejecting access: %s",
+            interviewee_id,
+            exc,
+        )
+        return False
+
+
+async def _send_direct_text_reply(
+    access_token: str,
+    reply_token: str,
+    user_id: str,
+    reply: str,
+) -> bool:
+    configuration = Configuration(access_token=access_token)
+    async with AsyncApiClient(configuration) as api_client:
+        return await _send_reply_or_push(
+            AsyncMessagingApi(api_client),
+            reply_token,
+            user_id,
+            reply,
+        )
 
 
 async def _process_text_event(
@@ -145,7 +188,35 @@ async def _process_text_event(
             reply = INTERVIEW_ERROR_REPLY
         else:
             await db.mark_transport_event_done(event_id)
+            if isinstance(reply, CrisisReply):
+                await _push_crisis_alert(
+                    line_bot_api,
+                    settings,
+                    interviewee_id,
+                    reply,
+                )
         await _send_reply_or_push(line_bot_api, reply_token, interviewee_id, reply)
+
+
+async def _push_crisis_alert(
+    line_bot_api: AsyncMessagingApi,
+    settings: Settings,
+    interviewee_id: str,
+    reply: CrisisReply,
+) -> None:
+    alert_user_id = settings.crisis_alert_line_user_id
+    if not alert_user_id:
+        return
+
+    interviewee_hash = hashlib.sha256(interviewee_id.encode()).hexdigest()[:8]
+    timestamp = datetime.now(UTC).isoformat(timespec="seconds")
+    alert = f"crisis gate triggered {interviewee_hash} {timestamp} {reply.category.value}"
+    try:
+        await line_bot_api.push_message(
+            PushMessageRequest(to=alert_user_id, messages=[TextMessage(text=alert)])
+        )
+    except Exception as exc:
+        logger.error("Crisis alert push failed for %s: %s", interviewee_hash, exc)
 
 
 async def _send_reply_or_push(

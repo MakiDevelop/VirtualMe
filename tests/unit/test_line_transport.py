@@ -19,10 +19,24 @@ class FakeRequest:
 
 
 class FakeDB:
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        has_existing_session: bool = True,
+        session_lookup_error: Exception | None = None,
+    ):
         self.claimed: set[str] = set()
         self.done: list[str] = []
         self.failed: list[tuple[str, str]] = []
+        self.has_existing_session = has_existing_session
+        self.session_lookup_error = session_lookup_error
+        self.session_lookups: list[str] = []
+
+    async def has_any_session(self, interviewee_id: str) -> bool:
+        self.session_lookups.append(interviewee_id)
+        if self.session_lookup_error is not None:
+            raise self.session_lookup_error
+        return self.has_existing_session
 
     async def claim_transport_event(
         self,
@@ -300,3 +314,175 @@ async def test_reply_failure_uses_push_fallback():
 
     assert await line._send_reply_or_push(FakeMessagingApi(), "reply-token", "U123", "reply")
     assert sent == [("U123", "reply")]
+
+
+async def test_unknown_user_without_session_is_rejected_before_enqueue(monkeypatch):
+    body = _line_body()
+    background = FakeBackgroundTasks()
+    db = FakeDB(has_existing_session=False)
+    settings = _settings()
+    settings.line_interview_allowlist = "U999"
+    settings.owner_line_user_id = "UOWNER"
+    replies = []
+
+    async def fake_direct_reply(access_token, reply_token, user_id, reply):
+        replies.append((access_token, reply_token, user_id, reply))
+        return True
+
+    async def fail_process_text_event(**kwargs):
+        raise AssertionError("rejected user must not be enqueued")
+
+    monkeypatch.setattr(line, "_send_direct_text_reply", fake_direct_reply)
+    monkeypatch.setattr(line, "_process_text_event", fail_process_text_event)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        db,
+        object(),
+        settings=settings,
+        background_tasks=background,
+    )
+
+    assert result == {"status": "ok", "queued": 0, "duplicate": 0, "skipped": 1}
+    assert background.tasks == []
+    assert db.claimed == set()
+    assert db.session_lookups == ["U123"]
+    assert replies == [("token", "reply-token", "U123", line.INTERVIEW_CLOSED_REPLY)]
+
+
+async def test_unknown_user_with_existing_session_is_allowed(monkeypatch):
+    body = _line_body()
+    background = FakeBackgroundTasks()
+    db = FakeDB(has_existing_session=True)
+    processed = []
+
+    async def fake_process_text_event(**kwargs):
+        processed.append(kwargs["interviewee_id"])
+
+    monkeypatch.setattr(line, "_process_text_event", fake_process_text_event)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        db,
+        object(),
+        settings=_settings(),
+        background_tasks=background,
+    )
+    await background.run()
+
+    assert result == {"status": "ok", "queued": 1, "duplicate": 0, "skipped": 0}
+    assert db.session_lookups == ["U123"]
+    assert processed == ["U123"]
+
+
+async def test_owner_is_allowed_when_interview_allowlist_is_empty(monkeypatch):
+    body = _line_body()
+    background = FakeBackgroundTasks()
+    db = FakeDB(has_existing_session=False)
+    settings = _settings()
+    settings.owner_line_user_id = "U123"
+    processed = []
+
+    async def fake_process_text_event(**kwargs):
+        processed.append(kwargs["interviewee_id"])
+
+    monkeypatch.setattr(line, "_process_text_event", fake_process_text_event)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        db,
+        object(),
+        settings=settings,
+        background_tasks=background,
+    )
+    await background.run()
+
+    assert result == {"status": "ok", "queued": 1, "duplicate": 0, "skipped": 0}
+    assert db.session_lookups == []
+    assert processed == ["U123"]
+
+
+async def test_empty_allowlist_and_owner_reject_new_user(monkeypatch):
+    body = _line_body()
+    background = FakeBackgroundTasks()
+    db = FakeDB(has_existing_session=False)
+    replies = []
+
+    async def fake_direct_reply(access_token, reply_token, user_id, reply):
+        replies.append((access_token, reply_token, user_id, reply))
+        return True
+
+    monkeypatch.setattr(line, "_send_direct_text_reply", fake_direct_reply)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        db,
+        object(),
+        settings=_settings(),
+        background_tasks=background,
+    )
+
+    assert result == {"status": "ok", "queued": 0, "duplicate": 0, "skipped": 1}
+    assert background.tasks == []
+    assert db.claimed == set()
+    assert replies == [("token", "reply-token", "U123", line.INTERVIEW_CLOSED_REPLY)]
+
+
+async def test_allowlisted_user_is_allowed_without_session_lookup(monkeypatch):
+    body = _line_body()
+    background = FakeBackgroundTasks()
+    db = FakeDB(has_existing_session=False)
+    settings = _settings()
+    settings.line_interview_allowlist = " U999, U123 ,U456 "
+    processed = []
+
+    async def fake_process_text_event(**kwargs):
+        processed.append(kwargs["interviewee_id"])
+
+    monkeypatch.setattr(line, "_process_text_event", fake_process_text_event)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        db,
+        object(),
+        settings=settings,
+        background_tasks=background,
+    )
+    await background.run()
+
+    assert result == {"status": "ok", "queued": 1, "duplicate": 0, "skipped": 0}
+    assert db.session_lookups == []
+    assert processed == ["U123"]
+
+
+async def test_session_lookup_error_fails_closed(monkeypatch, caplog):
+    body = _line_body()
+    background = FakeBackgroundTasks()
+    db = FakeDB(session_lookup_error=RuntimeError("database unavailable"))
+    replies = []
+
+    async def fake_direct_reply(access_token, reply_token, user_id, reply):
+        replies.append((access_token, reply_token, user_id, reply))
+        return True
+
+    monkeypatch.setattr(line, "_send_direct_text_reply", fake_direct_reply)
+
+    result = await line.handle_line_webhook(
+        FakeRequest(body, _signature(body)),
+        object(),
+        db,
+        object(),
+        settings=_settings(),
+        background_tasks=background,
+    )
+
+    assert result == {"status": "ok", "queued": 0, "duplicate": 0, "skipped": 1}
+    assert background.tasks == []
+    assert db.claimed == set()
+    assert "session lookup failed" in caplog.text
+    assert replies == [("token", "reply-token", "U123", line.INTERVIEW_CLOSED_REPLY)]

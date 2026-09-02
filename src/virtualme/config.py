@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     responder_line_channel_secret: SecretStr | None = None
     persona_archive_dir: str | None = None
     owner_line_user_id: str | None = None
+    crisis_alert_line_user_id: str | None = None
+    operator_display_name: str = Field(
+        default="operator",
+        validation_alias=AliasChoices("operator_display_name", "OPERATOR_DISPLAY_NAME"),
+    )
     database_url: str = "sqlite:///./data/virtualme.db"
     session_max_minutes: int = 25
     energy_low_threshold: int = 3
@@ -77,6 +82,13 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("reasoning_test_user_ids", "REASONING_TEST_USER_IDS"),
     )
+    line_interview_allowlist: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "line_interview_allowlist",
+            "LINE_INTERVIEW_ALLOWLIST",
+        ),
+    )
     reasoner_model_name: str | None = Field(
         default=None,
         validation_alias=AliasChoices("reasoner_model_name", "REASONER_MODEL_NAME"),
@@ -117,6 +129,19 @@ class Settings(BaseSettings):
             "VIRTUALME_PERSONA_DOWNLOAD_EXPIRY_MINUTES",
         ),
     )
+
+    def interview_allowlist_ids(self) -> set[str]:
+        allowed = {
+            user_id.strip()
+            for user_id in self.line_interview_allowlist.split(",")
+            if user_id.strip()
+        }
+        if self.owner_line_user_id and self.owner_line_user_id.strip():
+            allowed.add(self.owner_line_user_id.strip())
+        return allowed
+
+    def is_interview_user_allowed(self, user_id: str) -> bool:
+        return user_id in self.interview_allowlist_ids()
 
 
 def sqlite_path(database_url: str) -> str:
