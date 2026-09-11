@@ -2,6 +2,8 @@
 
 > Extract a person into an AI agent — through an 8-week interview, not a form.
 
+> **Status (2026-09-11):** This public repo is the OSS extract. May 2026 v0.5 / v0.6 GitHub issues are **not** an active delivery queue — see [ROADMAP.md](ROADMAP.md).
+
 **Current release: v1.1.1** — Constitution v1.1 plus M2 runtime enforcement: export / snapshot no longer treat legacy `triangulated=True` as a validated trait, and generated unhedged stable-trait assertions are blocked before files are written.
 
 ### v1.1.1 Highlights
@@ -136,7 +138,7 @@ VirtualMe ships with SQLite (zero-dep, local-first). For the full 8-week pipelin
 
 memhall provides hybrid search, provenance / upstream tracking, HMAC auth, CJK tokenization — things you can build on top of SQLite but shouldn't have to. The two projects are naturally complementary: VirtualMe **extracts** the person → memhall **stores + reflects + learns across sessions**.
 
-Integration plan tracked in issues [#5](https://github.com/MakiDevelop/VirtualMe/issues/5) and [#10](https://github.com/MakiDevelop/VirtualMe/issues/10) for v0.5.
+L3/L4 and a pluggable memory-hall backend are **not** current public deliverables. See [ROADMAP.md](ROADMAP.md).
 
 ## Honest limitations
 

@@ -7,6 +7,8 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![English](https://img.shields.io/badge/Lang-English-red.svg)](README.en.md)
 
+> **Status (2026-09-11):** This public repo is the OSS extract. May 2026 v0.5 / v0.6 GitHub issues are **not** an active delivery queue — see [ROADMAP.md](ROADMAP.md).
+
 > **最新版本 v1.1.1** — Constitution v1.1 + M2 runtime enforcement：export / snapshot 不再把 legacy `triangulated=True` 當 validated trait，並在寫檔前阻擋 unhedged stable-trait assertion。完整變更見 [CHANGELOG](CHANGELOG.md)。
 
 ---
@@ -137,7 +139,7 @@ VirtualMe 預設用 SQLite（零依賴、本地），但**真要跑 8 週深度 
 
 memhall 內建 hybrid search、provenance / upstream tracking、HMAC auth、CJK 分詞——這些是 SQLite 路徑做得到但要重造輪子的東西。兩個專案是天然互補：VirtualMe **萃取**人 → memhall **存取 + 反省 + 跨 session 學習**。
 
-詳細整合計畫見 v0.5 issue [#5](https://github.com/MakiDevelop/VirtualMe/issues/5) 與 [#10](https://github.com/MakiDevelop/VirtualMe/issues/10)。
+公開倉不把 L3/L4 或 pluggable memory-hall backend 當現行交付。說明見 [ROADMAP.md](ROADMAP.md)。
 
 ## 誠實告知的限制
 
